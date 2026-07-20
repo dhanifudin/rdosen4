@@ -2,7 +2,6 @@ import { supabase, configOk, DB_SCHEMA, REQUIRED_DOMAIN, signInWithGoogle, check
 
 const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
-const searchEl = document.getElementById('search');
 
 const noticeEl = document.getElementById('notice');
 const signInLinkEl = document.getElementById('sign-in-link');
@@ -77,18 +76,18 @@ function initials(name) {
 // dedicated tab treatment; the 4 known presets each get a distinct color;
 // anything else (custom-typed text) falls back to a generic brass tab.
 const PRESET_TAB_CLASSES = {
-  sibuk: 'bg-sibuksoft dark:bg-sibuksoftdark text-sibuk dark:text-sibukdark',
-  'tugas belajar': 'bg-tugasbelajarsoft dark:bg-tugasbelajarsoftdark text-tugasbelajar dark:text-tugasbelajardark',
-  cuti: 'bg-cutisoft dark:bg-cutisoftdark text-cuti dark:text-cutidark',
-  rapat: 'bg-rapatsoft dark:bg-rapatsoftdark text-rapat dark:text-rapatdark',
+  sibuk: 'bg-sibuk dark:bg-sibukdark text-white dark:text-paperdark',
+  'tugas belajar': 'bg-tugasbelajar dark:bg-tugasbelajardark text-white dark:text-paperdark',
+  cuti: 'bg-cuti dark:bg-cutidark text-white dark:text-paperdark',
+  rapat: 'bg-rapat dark:bg-rapatdark text-white dark:text-paperdark',
 };
 
 function statusTab(status) {
-  if (status === 'present') return { label: 'MASUK', classes: 'bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark' };
-  if (status === 'absent') return { label: 'KELUAR', classes: 'bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark' };
-  if (status === 'private') return { label: 'PRIBADI', classes: 'bg-surface2 dark:bg-surfacedark2 text-muted dark:text-muteddark' };
+  if (status === 'present') return { label: 'MASUK', classes: 'bg-present dark:bg-presentdark text-white dark:text-paperdark' };
+  if (status === 'absent') return { label: 'KELUAR', classes: 'bg-absentc dark:bg-absentcdark text-white dark:text-paperdark' };
+  if (status === 'private') return { label: 'PRIBADI', classes: 'bg-muted dark:bg-muteddark text-white dark:text-paperdark' };
   const preset = PRESET_TAB_CLASSES[status.toLowerCase()];
-  return { label: status.toUpperCase(), classes: preset || 'bg-brasssoft dark:bg-brasssoftdark text-brass dark:text-brassdark' };
+  return { label: status.toUpperCase(), classes: preset || 'bg-brass dark:bg-brassdark text-white dark:text-paperdark' };
 }
 
 function seenLine(r) {
@@ -113,22 +112,18 @@ function plateCard(r) {
         <h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
         ${seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : ''}
       </div>
-      <span class="shrink-0 self-stretch flex items-center px-2.5 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
-        style="clip-path:polygon(28% 0, 100% 0, 100% 100%, 0% 100%)"
+      <span class="shrink-0 self-stretch w-24 flex items-center justify-center text-center leading-tight pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
+        style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
       >${escapeHtml(tab.label)}</span>
     </article>`;
 }
 
 function render() {
-  const filter = searchEl.value.trim().toLowerCase();
-  const all = Array.from(rows.values());
-  const list = all
-    .filter((r) => !filter || r.full_name.toLowerCase().includes(filter))
-    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const list = Array.from(rows.values()).sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   boardEl.innerHTML = list.length
     ? list.map(plateCard).join('')
-    : '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Tidak ada dosen yang cocok.</p>';
+    : '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Belum ada data dosen.</p>';
 
   updatedEl.textContent = `Diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
 }
@@ -321,7 +316,6 @@ supabase.auth.getSession().then(({ data }) => renderAuth(data.session));
 
 // ------------------------------------------------------------------------
 
-searchEl.addEventListener('input', render);
 setInterval(render, 15000); // keep relative timestamps fresh even with no new events
 
 loadInitial().then(subscribeRealtime);
