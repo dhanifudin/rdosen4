@@ -166,6 +166,10 @@ function subscribeRealtime() {
       const userId = payload.new?.user_id ?? payload.old?.user_id;
       if (userId) refreshUser(userId);
     })
+    .on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'users' }, (payload) => {
+      const userId = payload.new?.id ?? payload.old?.id;
+      if (userId) refreshUser(userId);
+    })
     .subscribe();
 }
 

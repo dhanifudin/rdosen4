@@ -255,6 +255,18 @@ begin
   end if;
 end $$;
 
+-- Also needed so manual status/note/privacy changes (writes to dosen4.users)
+-- push live to every viewer, not just presence flips.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'dosen4' and tablename = 'users'
+  ) then
+    alter publication supabase_realtime add table dosen4.users;
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------
 -- Self-service device registration via Google SSO (Supabase Auth).
 --
