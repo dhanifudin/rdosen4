@@ -3,8 +3,6 @@ import { supabase, configOk, DB_SCHEMA, REQUIRED_DOMAIN, signInWithGoogle, check
 const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
 const searchEl = document.getElementById('search');
-const presentCountEl = document.getElementById('present-count');
-const totalCountEl = document.getElementById('total-count');
 
 const noticeEl = document.getElementById('notice');
 const signInLinkEl = document.getElementById('sign-in-link');
@@ -128,10 +126,6 @@ function render() {
   boardEl.innerHTML = list.length
     ? list.map(plateCard).join('')
     : '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Tidak ada dosen yang cocok.</p>';
-
-  const presentCount = all.filter((r) => r.status === 'present').length;
-  presentCountEl.textContent = String(presentCount);
-  totalCountEl.textContent = `/ ${all.length} hadir sekarang`;
 
   updatedEl.textContent = `Diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
 }
