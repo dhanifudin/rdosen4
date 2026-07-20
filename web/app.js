@@ -18,7 +18,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT')
 const DB_SCHEMA = 'dosen4';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: DB_SCHEMA } });
 
-/** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null, photo_url: string|null}>} */
+/** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null, photo_url: string|null, note: string|null}>} */
 const rows = new Map();
 
 function escapeHtml(s) {
@@ -50,9 +50,28 @@ function initials(name) {
   return letters.join('').toUpperCase();
 }
 
+// Status is open-ended (a manual status can be any short text a lecturer
+// chooses), not a strict present/absent/private enum -- only these three
+// values get their own dedicated tab treatment; anything else is a manual
+// override and gets a neutral "custom status" tab showing the text as-is.
+function statusTab(status) {
+  if (status === 'present') return { label: 'MASUK', classes: 'bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark' };
+  if (status === 'absent') return { label: 'KELUAR', classes: 'bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark' };
+  if (status === 'private') return { label: 'PRIBADI', classes: 'bg-surface2 dark:bg-surfacedark2 text-muted dark:text-muteddark' };
+  return { label: status.toUpperCase(), classes: 'bg-brasssoft dark:bg-brasssoftdark text-brass dark:text-brassdark' };
+}
+
+function seenLine(r) {
+  if (r.status === 'present') return `Sejak ${timeOfDay(r.since)}`;
+  if (r.status === 'absent') return relativeTime(r.last_seen_at);
+  if (r.status === 'private') return '';
+  // Manual status: prefer the note; fall back to when it was set.
+  return r.note || (r.since ? `Sejak ${timeOfDay(r.since)}` : '');
+}
+
 function plateCard(r) {
-  const isIn = r.status === 'present';
-  const seenText = isIn ? `Sejak ${timeOfDay(r.since)}` : relativeTime(r.last_seen_at);
+  const tab = statusTab(r.status);
+  const seenText = seenLine(r);
   const photo = r.photo_url
     ? `<img class="w-13 h-13 rounded object-cover border border-line dark:border-linedark shrink-0" style="width:52px;height:52px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
     : `<div class="w-13 h-13 rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:52px;height:52px">${escapeHtml(initials(r.full_name))}</div>`;
@@ -62,14 +81,11 @@ function plateCard(r) {
       ${photo}
       <div class="min-w-0 flex-1">
         <h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
-        <p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums]">${seenText}</p>
+        ${seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : ''}
       </div>
-      <span class="shrink-0 self-stretch flex items-center px-2.5 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider
-        ${isIn
-          ? 'bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark'
-          : 'bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark'}"
+      <span class="shrink-0 self-stretch flex items-center px-2.5 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
         style="clip-path:polygon(28% 0, 100% 0, 100% 100%, 0% 100%)"
-      >${isIn ? 'MASUK' : 'KELUAR'}</span>
+      >${escapeHtml(tab.label)}</span>
     </article>`;
 }
 

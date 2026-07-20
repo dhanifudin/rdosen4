@@ -36,6 +36,17 @@ create table if not exists dosen4.users (
 alter table dosen4.users add column if not exists photo_url text;
 alter table dosen4.users add column if not exists auth_user_id uuid unique references auth.users(id);
 
+-- Self-service manual status override (e.g. "Sibuk", "Tugas Belajar", "Cuti",
+-- "Rapat", or any custom text) + an optional note, and a privacy toggle that
+-- hides live auto-detected presence from the public board. See
+-- set_manual_status()/set_privacy_mode() and the presence_board view further
+-- down. Free text rather than a fixed enum, so a new status type never needs
+-- a schema change -- length-capped to keep the board's card layout sane.
+alter table dosen4.users add column if not exists manual_status text check (char_length(manual_status) <= 40);
+alter table dosen4.users add column if not exists manual_note text check (char_length(manual_note) <= 280);
+alter table dosen4.users add column if not exists manual_status_since timestamptz;
+alter table dosen4.users add column if not exists privacy_mode boolean not null default false;
+
 -- Backfill for rows created before auth_user_id existed: the only ways a
 -- dosen4.users row is ever created are the seed file or handle_new_user,
 -- so an existing row whose id already matches a real auth.users.id is,
@@ -123,14 +134,30 @@ create trigger trg_devices_normalize_mac
 -- Public read view (name + status only — no MAC addresses or identifiers).
 -- ---------------------------------------------------------------------
 
+-- Status precedence: an explicit self-set manual_status always wins (a
+-- lecturer choosing "Tugas Belajar" is never silently hidden by their own
+-- privacy toggle); otherwise privacy_mode replaces live auto-tracking with
+-- a neutral 'private' status; otherwise the real automatic present/absent.
+-- last_seen_at/since never carry raw auto-tracking data alongside a manual
+-- or private status -- since instead reflects manual_status_since so the
+-- "Sejak HH:MM" display works the same way for both cases.
 create or replace view dosen4.presence_board as
 select
   u.id as user_id,
   u.full_name,
-  coalesce(p.status, 'absent') as status,
-  p.last_seen_at,
-  p.since,
-  u.photo_url
+  case
+    when u.manual_status is not null then u.manual_status
+    when u.privacy_mode then 'private'
+    else coalesce(p.status, 'absent')
+  end as status,
+  case when u.manual_status is null and not u.privacy_mode then p.last_seen_at else null end as last_seen_at,
+  case
+    when u.manual_status is not null then u.manual_status_since
+    when u.privacy_mode then null
+    else p.since
+  end as since,
+  u.photo_url,
+  case when u.manual_status is not null then u.manual_note else null end as note
 from dosen4.users u
 left join dosen4.presence p on p.user_id = u.id
 where u.active = true
@@ -350,15 +377,11 @@ drop policy if exists "users can view own profile" on dosen4.users;
 create policy "users can view own profile" on dosen4.users
   for select using (auth.uid() = id);
 
-drop policy if exists "users can update own profile" on dosen4.users;
-create policy "users can update own profile" on dosen4.users
-  for update using (auth.uid() = id) with check (auth.uid() = id);
-
 drop policy if exists "users can view own devices" on dosen4.devices;
 create policy "users can view own devices" on dosen4.devices
   for select using (auth.uid() = user_id);
 
-grant select, update on dosen4.users to authenticated;
+grant select on dosen4.users to authenticated;
 grant select on dosen4.devices to authenticated;
 
 -- ---------------------------------------------------------------------
@@ -704,9 +727,16 @@ drop policy if exists "users can view own profile" on dosen4.users;
 create policy "users can view own profile" on dosen4.users
   for select using (auth.uid() = auth_user_id);
 
+-- Security fix: "users can update own profile" used to allow any signed-in
+-- account to directly PATCH *any* column of their own row via PostgREST --
+-- including auth_domain_ok, letting a non-@polinema.ac.id account grant
+-- itself device-registration rights by flipping that flag directly,
+-- bypassing every domain check in register_device/start_detection_window.
+-- Removed entirely: dosen4.users is now select-only at the REST layer,
+-- same as devices/detection_windows -- every write goes through an RPC
+-- (register_device, remove_device, set_manual_status, set_privacy_mode).
 drop policy if exists "users can update own profile" on dosen4.users;
-create policy "users can update own profile" on dosen4.users
-  for update using (auth.uid() = auth_user_id) with check (auth.uid() = auth_user_id);
+revoke update on dosen4.users from authenticated;
 
 drop policy if exists "users can view own devices" on dosen4.devices;
 create policy "users can view own devices" on dosen4.devices
@@ -847,3 +877,89 @@ $$;
 -- dosen4.users.id / dosen4.devices.user_id (via detection_windows.user_id,
 -- which start_detection_window already resolves to the stable id above),
 -- never on auth.uid() directly.
+
+-- ---------------------------------------------------------------------
+-- Self-service manual status/note + privacy mode. The only way
+-- `authenticated` can write these fields -- dosen4.users has no direct
+-- UPDATE access at all (see the security fix note further up), same
+-- RPC-only pattern as devices/detection_windows.
+-- ---------------------------------------------------------------------
+
+create or replace function dosen4.set_manual_status(p_status text, p_note text default null)
+returns void
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  my_id uuid;
+  domain_ok boolean;
+  clean_status text := nullif(trim(p_status), '');
+  clean_note text := nullif(trim(coalesce(p_note, '')), '');
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select u.id, u.auth_domain_ok into my_id, domain_ok
+  from dosen4.users u where u.auth_user_id = uid;
+
+  if my_id is null then
+    raise exception 'No profile found for this account.';
+  end if;
+
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can set a status.';
+  end if;
+
+  if clean_status is not null and char_length(clean_status) > 40 then
+    raise exception 'Status text is too long (max 40 characters).';
+  end if;
+  if clean_note is not null and char_length(clean_note) > 280 then
+    raise exception 'Note is too long (max 280 characters).';
+  end if;
+
+  update dosen4.users
+  set manual_status = clean_status,
+      manual_note = case when clean_status is null then null else clean_note end,
+      manual_status_since = case when clean_status is null then null else now() end
+  where id = my_id;
+end;
+$$;
+
+revoke all on function dosen4.set_manual_status(text, text) from public;
+grant execute on function dosen4.set_manual_status(text, text) to authenticated;
+
+create or replace function dosen4.set_privacy_mode(p_enabled boolean)
+returns void
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  my_id uuid;
+  domain_ok boolean;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select u.id, u.auth_domain_ok into my_id, domain_ok
+  from dosen4.users u where u.auth_user_id = uid;
+
+  if my_id is null then
+    raise exception 'No profile found for this account.';
+  end if;
+
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can change this setting.';
+  end if;
+
+  update dosen4.users set privacy_mode = coalesce(p_enabled, false) where id = my_id;
+end;
+$$;
+
+revoke all on function dosen4.set_privacy_mode(boolean) from public;
+grant execute on function dosen4.set_privacy_mode(boolean) to authenticated;

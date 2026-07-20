@@ -27,6 +27,15 @@ const labelInputEl = document.getElementById('label-input');
 const devicesWrapEl = document.getElementById('devices-wrap');
 const devicesListEl = document.getElementById('devices-list');
 
+const statusWrapEl = document.getElementById('status-wrap');
+const statusCurrentEl = document.getElementById('status-current');
+const statusCurrentTextEl = document.getElementById('status-current-text');
+const statusFormEl = document.getElementById('status-form');
+const statusInputEl = document.getElementById('status-input');
+const statusNoteInputEl = document.getElementById('status-note-input');
+const statusClearBtn = document.getElementById('status-clear');
+const privacyToggleEl = document.getElementById('privacy-toggle');
+
 const NOTICE_CLASSES = {
   error: 'text-sm px-4 py-3 rounded bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark border border-absentc/20 dark:border-absentcdark/20 mb-4',
   info: 'text-sm px-4 py-3 rounded bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark border border-present/20 dark:border-presentdark/20 mb-4',
@@ -127,6 +136,77 @@ async function registerDevice(mac, label) {
   await loadDevices();
 }
 
+// --- Manual status/note + privacy mode --------------------------------
+
+async function loadStatus() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('manual_status, manual_note, privacy_mode')
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    return;
+  }
+  if (!data) return;
+
+  if (data.manual_status) {
+    statusCurrentEl.hidden = false;
+    statusCurrentTextEl.textContent = data.manual_note
+      ? `${data.manual_status} — ${data.manual_note}`
+      : data.manual_status;
+    statusInputEl.value = data.manual_status;
+    statusNoteInputEl.value = data.manual_note || '';
+  } else {
+    statusCurrentEl.hidden = true;
+    statusInputEl.value = '';
+    statusNoteInputEl.value = '';
+  }
+
+  privacyToggleEl.checked = Boolean(data.privacy_mode);
+}
+
+async function saveStatus(status, note) {
+  const { error } = await supabase.rpc('set_manual_status', {
+    p_status: status.trim() || null,
+    p_note: note.trim() || null,
+  });
+  if (error) {
+    showNotice(error.message);
+    return;
+  }
+  clearNotice();
+  await loadStatus();
+}
+
+async function clearStatus() {
+  await saveStatus('', '');
+}
+
+async function togglePrivacy(enabled) {
+  const { error } = await supabase.rpc('set_privacy_mode', { p_enabled: enabled });
+  if (error) {
+    showNotice(error.message);
+    privacyToggleEl.checked = !enabled; // revert the checkbox on failure
+    return;
+  }
+  clearNotice();
+}
+
+document.querySelectorAll('.status-preset').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    statusInputEl.value = btn.dataset.status;
+    statusInputEl.focus();
+  });
+});
+
+statusFormEl.addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveStatus(statusInputEl.value, statusNoteInputEl.value);
+});
+
+statusClearBtn.addEventListener('click', clearStatus);
+privacyToggleEl.addEventListener('change', () => togglePrivacy(privacyToggleEl.checked));
+
 // --- Auto-detect via Wi-Fi reconnect ---------------------------------
 
 function resetDetectUI() {
@@ -221,6 +301,7 @@ async function render(session) {
   if (!session) {
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
+    statusWrapEl.hidden = true;
     detectWrapEl.hidden = true;
     manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
@@ -233,6 +314,7 @@ async function render(session) {
     await supabase.auth.signOut();
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
+    statusWrapEl.hidden = true;
     detectWrapEl.hidden = true;
     manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
@@ -242,11 +324,13 @@ async function render(session) {
   clearNotice();
   signedOutEl.hidden = true;
   signedInEl.hidden = false;
+  statusWrapEl.hidden = false;
   detectWrapEl.hidden = false;
   manualFallbackEl.hidden = false;
   devicesWrapEl.hidden = false;
   userEmailEl.textContent = email;
   resetDetectUI();
+  await loadStatus();
   await loadDevices();
 }
 
