@@ -27,6 +27,25 @@ create table if not exists dosen4.users (
   created_at timestamptz not null default now()
 );
 
+-- Added later (photo_url for the board UI; auth_user_id links a profile to
+-- an actual Supabase Auth login -- see "Identity linking by name match"
+-- further down for why these are separate from id). Placed here, right
+-- after the table, so every view/function defined below can rely on them
+-- existing regardless of run order -- ALTER TABLE ADD COLUMN IF NOT EXISTS
+-- is safe to run before or after data already exists.
+alter table dosen4.users add column if not exists photo_url text;
+alter table dosen4.users add column if not exists auth_user_id uuid unique references auth.users(id);
+
+-- Backfill for rows created before auth_user_id existed: the only ways a
+-- dosen4.users row is ever created are the seed file or handle_new_user,
+-- so an existing row whose id already matches a real auth.users.id is,
+-- by construction, an already-self-claimed profile from before this
+-- migration -- link it. Idempotent (guarded by "where auth_user_id is
+-- null"), safe to re-run.
+update dosen4.users
+set auth_user_id = id
+where auth_user_id is null and id in (select au.id from auth.users au);
+
 create table if not exists dosen4.devices (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references dosen4.users(id) on delete cascade,
@@ -110,7 +129,8 @@ select
   u.full_name,
   coalesce(p.status, 'absent') as status,
   p.last_seen_at,
-  p.since
+  p.since,
+  u.photo_url
 from dosen4.users u
 left join dosen4.presence p on p.user_id = u.id
 where u.active = true
@@ -570,3 +590,260 @@ $$;
 
 revoke all on function dosen4.is_detection_window_open() from public;
 grant execute on function dosen4.is_detection_window_open() to service_role;
+
+-- ---------------------------------------------------------------------
+-- Identity linking by name match + lecturer photos.
+--
+-- dosen4.users.id stays a stable identity independent of login (it's what
+-- devices/presence/attendance_log/detection_windows all key off). A new
+-- auth_user_id column links a profile to an actual Supabase Auth login,
+-- separately -- because a pre-seeded lecturer profile (see
+-- dosen4.upsert_lecturer below) has to exist *before* that person ever
+-- signs in, under some placeholder id, and can't already equal their
+-- future auth id. On first sign-in, handle_new_user() tries to claim an
+-- existing *unclaimed* (auth_user_id is null) profile whose name matches
+-- the Google account's display name (normalized: text before the first
+-- comma, lowercased, punctuation stripped, whitespace collapsed) --
+-- deliberately conservative, exact-match-or-nothing, so an ambiguous or
+-- no match just falls back to creating an independent new profile (the
+-- prior behavior) rather than risk linking the wrong person's devices.
+-- (photo_url / auth_user_id columns and the backfill live up near the
+-- dosen4.users table definition, so they exist before anything below --
+-- including the presence_board view -- can reference them.)
+-- ---------------------------------------------------------------------
+
+create or replace function dosen4.normalize_name(raw text)
+returns text
+language sql
+immutable
+as $$
+  select trim(regexp_replace(regexp_replace(lower(split_part(raw, ',', 1)), '[^a-z ]', '', 'g'), '\s+', ' ', 'g'));
+$$;
+
+create or replace function dosen4.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  google_name text;
+  normalized_google_name text;
+  matched_id uuid;
+begin
+  google_name := coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1));
+  normalized_google_name := dosen4.normalize_name(google_name);
+
+  select u.id into matched_id
+  from dosen4.users u
+  where u.auth_user_id is null
+    and dosen4.normalize_name(u.full_name) = normalized_google_name
+  limit 1;
+
+  if matched_id is not null then
+    update dosen4.users
+    set auth_user_id = new.id,
+        auth_domain_ok = (new.email ilike '%@polinema.ac.id')
+    where id = matched_id;
+  else
+    insert into dosen4.users (id, auth_user_id, full_name, auth_domain_ok)
+    values (new.id, new.id, google_name, (new.email ilike '%@polinema.ac.id'))
+    on conflict (id) do nothing;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function dosen4.handle_new_user();
+
+-- Admin-only seeding/reconciliation helper (no API grants -- run via the
+-- SQL editor as the table owner). Same find-by-normalized-name-or-insert
+-- logic as the trigger, so re-running the seed for a lecturer either
+-- creates their profile or reconciles an existing (claimed or unclaimed)
+-- one's display data, without ever touching id/auth_user_id/devices.
+create or replace function dosen4.upsert_lecturer(p_full_name text, p_photo_url text, p_role text default 'dosen')
+returns void
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  norm text := dosen4.normalize_name(p_full_name);
+  existing_id uuid;
+begin
+  select u.id into existing_id
+  from dosen4.users u
+  where dosen4.normalize_name(u.full_name) = norm
+  limit 1;
+
+  if existing_id is not null then
+    update dosen4.users
+    set full_name = p_full_name, photo_url = p_photo_url, role = p_role
+    where id = existing_id;
+  else
+    insert into dosen4.users (full_name, photo_url, role, active)
+    values (p_full_name, p_photo_url, p_role, true);
+  end if;
+end;
+$$;
+
+revoke all on function dosen4.upsert_lecturer(text, text, text) from public;
+
+-- (presence_board already exposes photo_url -- see its single definition
+-- up near the dosen4.users table.)
+
+-- RLS policies and RPCs that used to assume auth.uid() = dosen4.users.id
+-- now resolve through auth_user_id instead, since a claimed lecturer
+-- profile's stable id and their auth id are no longer the same value.
+
+drop policy if exists "users can view own profile" on dosen4.users;
+create policy "users can view own profile" on dosen4.users
+  for select using (auth.uid() = auth_user_id);
+
+drop policy if exists "users can update own profile" on dosen4.users;
+create policy "users can update own profile" on dosen4.users
+  for update using (auth.uid() = auth_user_id) with check (auth.uid() = auth_user_id);
+
+drop policy if exists "users can view own devices" on dosen4.devices;
+create policy "users can view own devices" on dosen4.devices
+  for select using (
+    user_id in (select id from dosen4.users where auth_user_id = auth.uid())
+  );
+
+drop policy if exists "users can view own detection window" on dosen4.detection_windows;
+create policy "users can view own detection window" on dosen4.detection_windows
+  for select using (
+    user_id in (select id from dosen4.users where auth_user_id = auth.uid())
+  );
+
+create or replace function dosen4.register_device(mac text, label text default null)
+returns dosen4.devices
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  my_id uuid;
+  domain_ok boolean;
+  normalized text;
+  device_count int;
+  new_device dosen4.devices;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select u.id, u.auth_domain_ok into my_id, domain_ok
+  from dosen4.users u where u.auth_user_id = uid;
+
+  if my_id is null then
+    raise exception 'No profile found for this account.';
+  end if;
+
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can register a device.';
+  end if;
+
+  normalized := dosen4.normalize_mac(mac);
+  if normalized is null then
+    raise exception 'Invalid MAC address: %', mac;
+  end if;
+
+  select count(*) into device_count from dosen4.devices where user_id = my_id;
+  if device_count >= 5 then
+    raise exception 'Device limit reached (max 5 per user).';
+  end if;
+
+  begin
+    insert into dosen4.devices (user_id, mac_address, label)
+    values (my_id, normalized, label)
+    returning * into new_device;
+  exception when unique_violation then
+    raise exception 'This device is already registered.';
+  end;
+
+  return new_device;
+end;
+$$;
+
+create or replace function dosen4.remove_device(device_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  my_id uuid;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select id into my_id from dosen4.users where auth_user_id = uid;
+  if my_id is null then
+    raise exception 'No profile found for this account.';
+  end if;
+
+  delete from dosen4.devices where id = device_id and user_id = my_id;
+  if not found then
+    raise exception 'Device not found.';
+  end if;
+end;
+$$;
+
+create or replace function dosen4.start_detection_window(p_label text default null)
+returns table(id uuid, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  my_id uuid;
+  domain_ok boolean;
+  device_count int;
+  new_id uuid;
+  new_expires timestamptz;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select u.id, u.auth_domain_ok into my_id, domain_ok
+  from dosen4.users u where u.auth_user_id = uid;
+
+  if my_id is null then
+    raise exception 'No profile found for this account.';
+  end if;
+
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can register a device.';
+  end if;
+
+  select count(*) into device_count from dosen4.devices where user_id = my_id;
+  if device_count >= 5 then
+    raise exception 'Device limit reached (max 5 per user).';
+  end if;
+
+  begin
+    insert into dosen4.detection_windows (user_id, label)
+    values (my_id, p_label)
+    returning detection_windows.id, detection_windows.expires_at into new_id, new_expires;
+  exception when unique_violation then
+    raise exception 'Someone else is registering a device right now -- please try again in a minute.';
+  end;
+
+  return query select new_id, new_expires;
+end;
+$$;
+
+-- observe_macs_for_detection needs no change: it only ever operates on
+-- dosen4.users.id / dosen4.devices.user_id (via detection_windows.user_id,
+-- which start_detection_window already resolves to the stable id above),
+-- never on auth.uid() directly.
