@@ -5,7 +5,7 @@ const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
 const searchEl = document.getElementById('search');
 
-if (SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
   boardEl.innerHTML = '<p class="empty">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to load the board.</p>';
   throw new Error('config.js still has placeholder Supabase credentials');
 }

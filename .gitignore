@@ -1,1 +1,5 @@
 .DS_Store
+
+# Generated at deploy time from repo secrets (SUPABASE_URL, SUPABASE_ANON_KEY) —
+# see .github/workflows/deploy-pages.yml. Never commit real values here.
+web/config.js

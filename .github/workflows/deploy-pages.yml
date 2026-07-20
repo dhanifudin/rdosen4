@@ -30,6 +30,20 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Generate config.js from repo secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_ANON_KEY repo secrets must be set (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+          cat > web/config.js <<EOF
+          export const SUPABASE_URL = '${SUPABASE_URL}';
+          export const SUPABASE_ANON_KEY = '${SUPABASE_ANON_KEY}';
+          EOF
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -26,20 +26,37 @@ dependency on `ada`; the two only share a Supabase project.
    MAC address with your own laptop/phone's MAC on the campus SSID — see
    `../ada/README.md` for the MAC-randomization caveat.
 5. From **Project Settings → API**, grab:
-   - the **Project URL** and **anon public key** → used by `web/config.js`
-   - the **service_role key** → used by `../ada/.env` (keep secret, never
-     put it here)
+   - the **Project URL** and **anon/publishable key** → set as GitHub Actions
+     repo secrets (see below), never committed to the repo
+   - the **service_role/secret key** → used by `../ada/.env` (keep secret,
+     never put it here or in GitHub Actions secrets for this repo)
 
 ## 2. Configure the frontend
 
+`web/config.js` is **not committed** (it's gitignored) — it's generated at
+deploy time by `.github/workflows/deploy-pages.yml` from two **GitHub
+Actions repository secrets**:
+
+1. Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+   - `SUPABASE_URL` — your Project URL
+   - `SUPABASE_ANON_KEY` — your anon/publishable key
+2. Every deploy regenerates `web/config.js` from these secrets before
+   publishing. If either is unset, the workflow fails fast with a clear
+   error instead of shipping a broken site.
+
+This applies even though the anon/publishable key is designed to be safe
+for client-side exposure (it can only do what RLS allows) — it still
+shouldn't be hardcoded into tracked source; secrets keep it out of git
+history and make rotation a one-click change.
+
+For **local testing** (no deploy), copy the template and fill it in
+yourself — this file stays untracked:
+
 ```bash
 cd rdosen4/web
-cp config.example.js config.js   # already present with placeholders
+cp config.example.js config.js   # gitignored, safe to fill in locally
 # edit config.js: SUPABASE_URL and SUPABASE_ANON_KEY
 ```
-
-The anon key is safe to commit — it can only read what RLS allows, i.e.
-name + status via `presence_board`.
 
 Open `web/index.html` directly in a browser to test locally (no build
 step, no server required — it's plain HTML/CSS/JS with `supabase-js`
@@ -49,7 +66,9 @@ loaded from a CDN).
 
 1. Push this repo to GitHub.
 2. In the repo settings, set **Pages → Source: GitHub Actions**.
-3. `.github/workflows/deploy-pages.yml` publishes the `web/` folder on
+3. Add the `SUPABASE_URL` and `SUPABASE_ANON_KEY` repository secrets (see
+   above) — the deploy fails without them.
+4. `.github/workflows/deploy-pages.yml` publishes the `web/` folder on
    every push to `main` that touches it (or via manual "Run workflow").
 
 ### Custom domain (`dosen4.makinmudah.com`)
