@@ -4,9 +4,11 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
 const searchEl = document.getElementById('search');
+const presentCountEl = document.getElementById('present-count');
+const totalCountEl = document.getElementById('total-count');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
-  boardEl.innerHTML = '<p class="empty">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to load the board.</p>';
+  boardEl.innerHTML = '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to load the board.</p>';
   throw new Error('config.js still has placeholder Supabase credentials');
 }
 
@@ -16,7 +18,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT')
 const DB_SCHEMA = 'dosen4';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: DB_SCHEMA } });
 
-/** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null}>} */
+/** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null, photo_url: string|null}>} */
 const rows = new Map();
 
 function escapeHtml(s) {
@@ -26,41 +28,73 @@ function escapeHtml(s) {
 }
 
 function relativeTime(iso) {
-  if (!iso) return 'never';
+  if (!iso) return 'belum terdeteksi';
   const diffMs = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diffMs / 1000);
-  if (s < 5) return 'just now';
-  if (s < 60) return `${s}s ago`;
+  if (s < 5) return 'baru saja';
+  if (s < 60) return `${s}d lalu`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `${m}m lalu`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return `${h}j lalu`;
+  return `${Math.floor(h / 24)} hari lalu`;
+}
+
+function timeOfDay(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+function initials(name) {
+  const letters = name.replace(/,.*/, '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '');
+  return letters.join('').toUpperCase();
+}
+
+function plateCard(r) {
+  const isIn = r.status === 'present';
+  const seenText = isIn ? `Sejak ${timeOfDay(r.since)}` : relativeTime(r.last_seen_at);
+  const photo = r.photo_url
+    ? `<img class="w-13 h-13 rounded object-cover border border-line dark:border-linedark shrink-0" style="width:52px;height:52px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
+    : `<div class="w-13 h-13 rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:52px;height:52px">${escapeHtml(initials(r.full_name))}</div>`;
+
+  return `
+    <article class="relative flex items-center gap-3.5 px-4 py-3.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
+      ${photo}
+      <div class="min-w-0 flex-1">
+        <h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
+        <p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums]">${seenText}</p>
+      </div>
+      <span class="shrink-0 self-stretch flex items-center px-2.5 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider
+        ${isIn
+          ? 'bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark'
+          : 'bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark'}"
+        style="clip-path:polygon(28% 0, 100% 0, 100% 100%, 0% 100%)"
+      >${isIn ? 'MASUK' : 'KELUAR'}</span>
+    </article>`;
 }
 
 function render() {
   const filter = searchEl.value.trim().toLowerCase();
-  const list = Array.from(rows.values())
+  const all = Array.from(rows.values());
+  const list = all
     .filter((r) => !filter || r.full_name.toLowerCase().includes(filter))
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   boardEl.innerHTML = list.length
-    ? list.map((r) => `
-        <div class="row">
-          <span class="name">${escapeHtml(r.full_name)}</span>
-          <span class="badge ${r.status}">${r.status}</span>
-          <span class="seen">${relativeTime(r.last_seen_at)}</span>
-        </div>
-      `).join('')
-    : '<p class="empty">No matching people.</p>';
+    ? list.map(plateCard).join('')
+    : '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Tidak ada dosen yang cocok.</p>';
 
-  updatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  const presentCount = all.filter((r) => r.status === 'present').length;
+  presentCountEl.textContent = String(presentCount);
+  totalCountEl.textContent = `/ ${all.length} hadir sekarang`;
+
+  updatedEl.textContent = `Diperbarui ${new Date().toLocaleTimeString('id-ID')}`;
 }
 
 async function loadInitial() {
   const { data, error } = await supabase.from('presence_board').select('*');
   if (error) {
-    boardEl.innerHTML = '<p class="empty">Failed to load attendance data.</p>';
+    boardEl.innerHTML = '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Gagal memuat data kehadiran.</p>';
     console.error(error);
     return;
   }

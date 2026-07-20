@@ -27,8 +27,13 @@ const labelInputEl = document.getElementById('label-input');
 const devicesWrapEl = document.getElementById('devices-wrap');
 const devicesListEl = document.getElementById('devices-list');
 
+const NOTICE_CLASSES = {
+  error: 'text-sm px-4 py-3 rounded bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark border border-absentc/20 dark:border-absentcdark/20 mb-4',
+  info: 'text-sm px-4 py-3 rounded bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark border border-present/20 dark:border-presentdark/20 mb-4',
+};
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
-  noticeEl.innerHTML = '<p class="notice error">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to enable sign-in.</p>';
+  noticeEl.innerHTML = `<p class="${NOTICE_CLASSES.error}">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to enable sign-in.</p>`;
   throw new Error('config.js still has placeholder Supabase credentials');
 }
 
@@ -51,7 +56,7 @@ function escapeHtml(s) {
 }
 
 function showNotice(message, kind = 'error') {
-  noticeEl.innerHTML = `<p class="notice ${kind}">${escapeHtml(message)}</p>`;
+  noticeEl.innerHTML = `<p class="${NOTICE_CLASSES[kind]}">${escapeHtml(message)}</p>`;
 }
 
 function clearNotice() {
@@ -83,13 +88,13 @@ async function loadDevices() {
   }
   devicesListEl.innerHTML = data.length
     ? data.map((d) => `
-        <div class="device-row" data-id="${d.id}">
-          <span class="mac">${escapeHtml(d.mac_address)}</span>
-          <span class="label">${escapeHtml(d.label || '')}</span>
-          <button class="btn danger remove-btn" data-id="${d.id}">Remove</button>
+        <div class="flex items-center gap-3 px-3.5 py-2.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded text-sm" data-id="${d.id}">
+          <span class="font-mono text-xs text-muted dark:text-muteddark">${escapeHtml(d.mac_address)}</span>
+          <span class="flex-1 min-w-0 truncate">${escapeHtml(d.label || '')}</span>
+          <button class="remove-btn shrink-0 px-2.5 py-1 rounded border border-line dark:border-linedark text-xs font-semibold text-absentc dark:text-absentcdark hover:bg-absentsoft dark:hover:bg-absentsoftdark" data-id="${d.id}">Hapus</button>
         </div>
       `).join('')
-    : '<p class="empty">No devices registered yet.</p>';
+    : '<p class="text-sm text-muted dark:text-muteddark">Belum ada perangkat terdaftar.</p>';
 
   devicesListEl.querySelectorAll('.remove-btn').forEach((btn) => {
     btn.addEventListener('click', () => removeDevice(btn.dataset.id));
@@ -108,7 +113,7 @@ async function removeDevice(deviceId) {
 
 async function registerDevice(mac, label) {
   if (!MAC_RE.test(mac.trim())) {
-    showNotice('That doesn\'t look like a valid MAC address.');
+    showNotice('Format alamat MAC tidak valid.');
     return;
   }
   const { error } = await supabase.rpc('register_device', { mac: mac.trim(), label: label.trim() || null });
@@ -166,10 +171,10 @@ async function startDetection() {
 
   const updateCountdown = () => {
     const secs = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
-    detectCountdownEl.textContent = `${secs}s remaining`;
+    detectCountdownEl.textContent = `sisa ${secs} detik`;
     if (secs <= 0) {
       stopDetection();
-      showNotice('No new device detected — make sure you turned Wi-Fi off before starting, then try again.');
+      showNotice('Tidak ada perangkat baru terdeteksi — pastikan Wi-Fi dimatikan sebelum memulai, lalu coba lagi.');
       resetDetectUI();
     }
   };
@@ -190,14 +195,14 @@ async function startDetection() {
 
     stopDetection();
     if (win.status === 'resolved') {
-      showNotice('Device registered!', 'info');
+      showNotice('Perangkat berhasil didaftarkan!', 'info');
       resetDetectUI();
       await loadDevices();
     } else if (win.status === 'ambiguous') {
-      showNotice('Another device joined the network at the same moment — please try again.');
+      showNotice('Ada perangkat lain yang terhubung pada saat bersamaan — silakan coba lagi.');
       resetDetectUI();
     } else {
-      showNotice('No new device detected — make sure you turned Wi-Fi off before starting, then try again.');
+      showNotice('Tidak ada perangkat baru terdeteksi — pastikan Wi-Fi dimatikan sebelum memulai, lalu coba lagi.');
       resetDetectUI();
     }
   }, DETECT_POLL_MS);
@@ -224,7 +229,7 @@ async function render(session) {
 
   const email = session.user.email || '';
   if (!email.toLowerCase().endsWith(REQUIRED_DOMAIN)) {
-    showNotice(`Only ${REQUIRED_DOMAIN} accounts can register a device. Signed in as ${email}.`);
+    showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat mendaftarkan perangkat. Anda masuk sebagai ${email}.`);
     await supabase.auth.signOut();
     signedOutEl.hidden = false;
     signedInEl.hidden = true;

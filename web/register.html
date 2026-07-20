@@ -3,73 +3,108 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Register Device — Attendance Board</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Daftarkan Perangkat — Ruang Dosen 4</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'media',
+      theme: {
+        extend: {
+          colors: {
+            paper: '#eef0ec', paperdark: '#14181a',
+            surface: '#ffffff', surfacedark: '#1b2224',
+            surface2: '#f6f7f3', surfacedark2: '#202829',
+            ink: '#1f2621', inkdark: '#e7ece7',
+            muted: '#5c6660', muteddark: '#93a098',
+            line: '#d9dcd3', linedark: '#2c3436',
+            brass: '#92721f', brassdark: '#d9b768',
+            present: '#2a6b4a', presentdark: '#63c090',
+            presentsoft: '#dcece1', presentsoftdark: '#17271e',
+            absentc: '#8a5a3b', absentcdark: '#d99b6c',
+            absentsoft: '#f1e6dc', absentsoftdark: '#2a1f16',
+          },
+          fontFamily: {
+            plate: ['"Iowan Old Style"', '"Palatino Linotype"', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <h1>Register Device</h1>
+<body class="bg-paper dark:bg-paperdark text-ink dark:text-inkdark min-h-screen">
+  <div class="max-w-xl mx-auto px-5 py-10 pb-20">
+
+    <header class="pb-6 border-b border-line dark:border-linedark mb-6">
+      <h1 class="font-plate text-2xl font-semibold tracking-tight [text-wrap:balance]">Daftarkan Perangkat</h1>
+      <p class="mt-1 text-sm text-muted dark:text-muteddark">Ruang Dosen 4 &middot; Jurusan Teknologi Informasi</p>
     </header>
-    <nav><a href="index.html">&larr; Back to board</a></nav>
+
+    <nav class="mb-6">
+      <a href="index.html" class="text-sm font-medium text-brass dark:text-brassdark hover:underline">&larr; Kembali ke papan kehadiran</a>
+    </nav>
 
     <div id="notice"></div>
 
-    <div id="signed-out" class="card" hidden>
-      <p>Sign in with your <strong>@polinema.ac.id</strong> Google account to register a device.</p>
-      <button id="sign-in" class="btn primary">Sign in with Google</button>
+    <div id="signed-out" class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mb-4" hidden>
+      <p class="text-sm mb-4">Masuk dengan akun Google <strong>@polinema.ac.id</strong> Anda untuk mendaftarkan perangkat.</p>
+      <button id="sign-in" class="inline-flex items-center gap-2 px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Masuk dengan Google</button>
     </div>
 
-    <div id="signed-in" class="card" hidden>
-      <p class="user-email">Signed in as <span id="user-email"></span></p>
-      <button id="sign-out" class="btn">Sign out</button>
+    <div id="signed-in" class="flex items-center justify-between gap-3 px-4 py-3 bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark rounded mb-4 text-sm" hidden>
+      <p class="text-muted dark:text-muteddark truncate">Masuk sebagai <span id="user-email" class="text-ink dark:text-inkdark font-medium"></span></p>
+      <button id="sign-out" class="shrink-0 px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface dark:hover:bg-surfacedark">Keluar</button>
     </div>
 
-    <div id="detect-wrap" class="card" hidden>
-      <h2 style="font-size:1rem;margin-top:0;">Register this device</h2>
+    <div id="detect-wrap" class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mb-4" hidden>
+      <h2 class="font-plate text-base font-semibold mb-3">Daftarkan perangkat ini</h2>
 
       <div id="detect-idle">
-        <p class="notice info">Works for phones and laptops alike — no typing, no app to install.</p>
-        <input id="detect-label-input" class="field" type="text" placeholder="Label (e.g. My laptop)" autocomplete="off" />
-        <button id="detect-start" class="btn primary">Detect my device</button>
+        <p class="text-xs px-3 py-2 rounded bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark text-muted dark:text-muteddark mb-3">
+          Berlaku untuk ponsel maupun laptop &mdash; tanpa mengetik, tanpa instalasi.
+        </p>
+        <input id="detect-label-input" type="text" placeholder="Label (mis. Laptop kerja)" autocomplete="off"
+          class="w-full px-3.5 py-2.5 mb-3 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
+        <button id="detect-start" class="px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Deteksi perangkat saya</button>
       </div>
 
       <div id="detect-active" hidden>
-        <ol>
-          <li><strong>Turn Wi-Fi OFF</strong> on the device you want to register — do this first.</li>
-          <li>Confirm below once it's off.</li>
-          <li>Wait a few seconds, then turn Wi-Fi back ON.</li>
+        <ol class="space-y-2 mb-4 text-sm">
+          <li class="flex gap-2"><span class="text-brass dark:text-brassdark font-bold [font-variant-numeric:tabular-nums]">1</span> <strong>Matikan Wi-Fi</strong> di perangkat yang ingin didaftarkan &mdash; lakukan ini dulu.</li>
+          <li class="flex gap-2"><span class="text-brass dark:text-brassdark font-bold [font-variant-numeric:tabular-nums]">2</span> Konfirmasi di bawah setelah Wi-Fi mati.</li>
+          <li class="flex gap-2"><span class="text-brass dark:text-brassdark font-bold [font-variant-numeric:tabular-nums]">3</span> Tunggu beberapa detik, lalu nyalakan kembali Wi-Fi.</li>
         </ol>
         <p id="detect-step2" hidden>
-          <button id="detect-confirm-off" class="btn primary">My Wi-Fi is off — start detecting</button>
+          <button id="detect-confirm-off" class="px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Wi-Fi sudah mati &mdash; mulai deteksi</button>
         </p>
-        <p id="detect-waiting" hidden>
-          Waiting for your device to reconnect&hellip; <span id="detect-countdown"></span>
+        <p id="detect-waiting" hidden class="text-sm text-muted dark:text-muteddark mb-3 [font-variant-numeric:tabular-nums]">
+          Menunggu perangkat terhubung kembali&hellip; <span id="detect-countdown" class="font-semibold text-ink dark:text-inkdark"></span>
         </p>
-        <button id="detect-cancel" class="btn">Cancel</button>
+        <button id="detect-cancel" class="px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2">Batal</button>
       </div>
     </div>
 
-    <details id="manual-fallback">
-      <summary>On a phone and detection didn't work? Enter the MAC manually</summary>
-      <div class="card">
-        <p class="notice info">
-          Find your device's Wi-Fi MAC address: iOS — Settings → Wi-Fi → (i) next to the network
-          → "Wireless Address"/"Private Wi-Fi Address". Android — Settings → About phone → Status
-          → Wi-Fi MAC address. Windows — run <code>getmac</code>. Mac/Linux — run <code>ifconfig</code>
-          or <code>ip link</code>.
+    <details id="manual-fallback" class="mb-6" hidden>
+      <summary class="cursor-pointer text-sm text-muted dark:text-muteddark hover:text-ink dark:hover:text-inkdark mb-2">Pakai ponsel dan deteksi tidak berhasil? Masukkan MAC secara manual</summary>
+      <div class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mt-2">
+        <p class="text-xs px-3 py-2 rounded bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark text-muted dark:text-muteddark mb-3">
+          Cara melihat alamat MAC Wi-Fi: iOS &mdash; Pengaturan &rarr; Wi-Fi &rarr; (i) di sebelah nama jaringan
+          &rarr; "Wireless Address"/"Private Wi-Fi Address". Android &mdash; Pengaturan &rarr; Tentang ponsel &rarr; Status
+          &rarr; Alamat MAC Wi-Fi. Windows &mdash; jalankan <code class="font-mono">getmac</code>. Mac/Linux &mdash; jalankan
+          <code class="font-mono">ifconfig</code> atau <code class="font-mono">ip link</code>.
         </p>
         <form id="register-form">
-          <input id="mac-input" class="field" type="text" placeholder="MAC address (e.g. aa:bb:cc:dd:ee:ff)" autocomplete="off" required />
-          <input id="label-input" class="field" type="text" placeholder="Label (e.g. My phone)" autocomplete="off" />
-          <button type="submit" class="btn primary">Register device</button>
+          <input id="mac-input" type="text" placeholder="Alamat MAC (mis. aa:bb:cc:dd:ee:ff)" autocomplete="off" required
+            class="w-full px-3.5 py-2.5 mb-3 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
+          <input id="label-input" type="text" placeholder="Label (mis. HP saya)" autocomplete="off"
+            class="w-full px-3.5 py-2.5 mb-3 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
+          <button type="submit" class="px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Daftarkan perangkat</button>
         </form>
       </div>
     </details>
 
     <div id="devices-wrap" hidden>
-      <h2 style="font-size:1rem;">Your devices</h2>
-      <div id="devices-list"></div>
+      <h2 class="font-plate text-base font-semibold mb-3">Perangkat Anda</h2>
+      <div id="devices-list" class="space-y-2"></div>
     </div>
   </div>
 

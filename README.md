@@ -64,8 +64,9 @@ cp config.example.js config.js   # gitignored, safe to fill in locally
 ```
 
 Open `web/index.html` directly in a browser to test locally (no build
-step, no server required — it's plain HTML/CSS/JS with `supabase-js`
-loaded from a CDN).
+step, no server required — it's plain HTML/JS with `supabase-js` and
+Tailwind (via the Play CDN, `cdn.tailwindcss.com`) both loaded from a
+CDN — no `styles.css`/build pipeline).
 
 ## 3. Deploy to GitHub Pages
 

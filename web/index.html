@@ -3,18 +3,72 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Attendance Board</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Ruang Dosen 4 — Attendance Board</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'media',
+      theme: {
+        extend: {
+          colors: {
+            paper: '#eef0ec', paperdark: '#14181a',
+            surface: '#ffffff', surfacedark: '#1b2224',
+            surface2: '#f6f7f3', surfacedark2: '#202829',
+            ink: '#1f2621', inkdark: '#e7ece7',
+            muted: '#5c6660', muteddark: '#93a098',
+            line: '#d9dcd3', linedark: '#2c3436',
+            brass: '#92721f', brassdark: '#d9b768',
+            present: '#2a6b4a', presentdark: '#63c090',
+            presentsoft: '#dcece1', presentsoftdark: '#17271e',
+            absentc: '#8a5a3b', absentcdark: '#d99b6c',
+            absentsoft: '#f1e6dc', absentsoftdark: '#2a1f16',
+          },
+          fontFamily: {
+            plate: ['"Iowan Old Style"', '"Palatino Linotype"', 'Georgia', 'serif'],
+          },
+        },
+      },
+    };
+  </script>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <h1>Attendance Board</h1>
-      <span id="last-updated"></span>
+<body class="bg-paper dark:bg-paperdark text-ink dark:text-inkdark min-h-screen">
+  <div class="max-w-4xl mx-auto px-5 py-10 pb-20">
+
+    <header class="flex flex-wrap items-end justify-between gap-4 pb-6 border-b border-line dark:border-linedark mb-8">
+      <div>
+        <h1 class="font-plate text-3xl font-semibold tracking-tight [text-wrap:balance]">Ruang Dosen 4</h1>
+        <p class="mt-1 text-sm text-muted dark:text-muteddark">
+          Jurusan Teknologi Informasi <span class="text-brass dark:text-brassdark">&middot;</span> live via jaringan Wi-Fi kampus
+        </p>
+      </div>
+      <div class="flex items-baseline gap-1 [font-variant-numeric:tabular-nums]">
+        <span id="present-count" class="text-3xl font-bold text-present dark:text-presentdark">0</span>
+        <span id="total-count" class="text-sm text-muted dark:text-muteddark">/ 0 hadir sekarang</span>
+      </div>
     </header>
-    <nav><a href="register.html">Register your device &rarr;</a></nav>
-    <input id="search" type="search" placeholder="Search name..." autocomplete="off" />
-    <div id="board"><p class="empty">Loading...</p></div>
+
+    <nav class="mb-6">
+      <a href="register.html" class="text-sm font-medium text-brass dark:text-brassdark hover:underline">
+        Daftarkan perangkat Anda &rarr;
+      </a>
+    </nav>
+
+    <div class="mb-6">
+      <input
+        id="search"
+        type="search"
+        placeholder="Cari nama dosen..."
+        autocomplete="off"
+        class="w-full max-w-sm px-3.5 py-2.5 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-ink dark:text-inkdark placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark text-sm"
+      />
+    </div>
+
+    <p class="text-xs uppercase tracking-wider text-muted dark:text-muteddark mb-3">Papan Kehadiran</p>
+    <div id="board" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Memuat...</p>
+    </div>
+
+    <p id="last-updated" class="mt-8 text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums]"></p>
   </div>
 
   <script type="module" src="app.js"></script>
