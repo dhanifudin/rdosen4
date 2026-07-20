@@ -11,13 +11,16 @@ const userEmailEl = document.getElementById('user-email');
 const signOutBtn = document.getElementById('sign-out');
 
 const statusWrapEl = document.getElementById('status-wrap');
-const statusCurrentEl = document.getElementById('status-current');
-const statusCurrentTextEl = document.getElementById('status-current-text');
-const statusFormEl = document.getElementById('status-form');
-const statusInputEl = document.getElementById('status-input');
+const statusToggleBtns = Array.from(document.querySelectorAll('.status-toggle'));
+const statusCustomToggleBtn = document.getElementById('status-custom-toggle');
+const statusCustomInputEl = document.getElementById('status-custom-input');
 const statusNoteInputEl = document.getElementById('status-note-input');
-const statusClearBtn = document.getElementById('status-clear');
 const privacyToggleEl = document.getElementById('privacy-toggle');
+const eyeOpenEl = document.getElementById('eye-open');
+const eyeClosedEl = document.getElementById('eye-closed');
+
+const KNOWN_PRESETS = new Set(['Sibuk', 'Tugas Belajar', 'Cuti', 'Rapat']);
+const CUSTOM_TOGGLE_DEFAULT_LABEL = 'Lainnya…';
 
 if (!configOk) {
   boardEl.innerHTML = '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to load the board.</p>';
@@ -179,20 +182,35 @@ async function loadStatus() {
   }
   if (!data) return;
 
-  if (data.manual_status) {
-    statusCurrentEl.hidden = false;
-    statusCurrentTextEl.textContent = data.manual_note
-      ? `${data.manual_status} — ${data.manual_note}`
-      : data.manual_status;
-    statusInputEl.value = data.manual_status;
-    statusNoteInputEl.value = data.manual_note || '';
-  } else {
-    statusCurrentEl.hidden = true;
-    statusInputEl.value = '';
-    statusNoteInputEl.value = '';
+  setActiveStatus(data.manual_status || '');
+  statusNoteInputEl.value = data.manual_note || '';
+  statusNoteInputEl.disabled = !data.manual_status;
+
+  const privacyOn = Boolean(data.privacy_mode);
+  privacyToggleEl.setAttribute('aria-pressed', String(privacyOn));
+  eyeOpenEl.hidden = privacyOn;
+  eyeClosedEl.hidden = !privacyOn;
+}
+
+// Reflects `status` (empty string = Otomatis) in the toggle group's visual
+// active state, including self-labeling the "Lainnya..." pill with the
+// actual custom text when that's what's active.
+function setActiveStatus(status) {
+  const isKnown = status === '' || KNOWN_PRESETS.has(status);
+  statusCustomToggleBtn.textContent = isKnown ? CUSTOM_TOGGLE_DEFAULT_LABEL : status;
+
+  for (const btn of statusToggleBtns) {
+    const isActive = isKnown ? btn.dataset.status === status : btn === statusCustomToggleBtn;
+    btn.classList.toggle('bg-brass', isActive);
+    btn.classList.toggle('dark:bg-brassdark', isActive);
+    btn.classList.toggle('text-white', isActive);
+    btn.classList.toggle('dark:text-paperdark', isActive);
+    btn.classList.toggle('border-brass', isActive);
+    btn.classList.toggle('dark:border-brassdark', isActive);
   }
 
-  privacyToggleEl.checked = Boolean(data.privacy_mode);
+  statusCustomInputEl.hidden = true;
+  statusCustomInputEl.value = isKnown ? '' : status;
 }
 
 async function saveStatus(status, note) {
@@ -208,34 +226,54 @@ async function saveStatus(status, note) {
   await loadStatus();
 }
 
-async function clearStatus() {
-  await saveStatus('', '');
-}
-
-async function togglePrivacy(enabled) {
+async function togglePrivacy() {
+  const enabled = privacyToggleEl.getAttribute('aria-pressed') !== 'true';
   const { error } = await supabase.rpc('set_privacy_mode', { p_enabled: enabled });
   if (error) {
     showNotice(error.message);
-    privacyToggleEl.checked = !enabled; // revert the checkbox on failure
     return;
   }
   clearNotice();
+  privacyToggleEl.setAttribute('aria-pressed', String(enabled));
+  eyeOpenEl.hidden = enabled;
+  eyeClosedEl.hidden = !enabled;
 }
 
-document.querySelectorAll('.status-preset').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    statusInputEl.value = btn.dataset.status;
-    statusInputEl.focus();
-  });
+for (const btn of statusToggleBtns) {
+  if (btn === statusCustomToggleBtn) continue;
+  btn.addEventListener('click', () => saveStatus(btn.dataset.status, statusNoteInputEl.value));
+}
+
+statusCustomToggleBtn.addEventListener('click', () => {
+  statusCustomInputEl.hidden = false;
+  statusCustomInputEl.focus();
 });
 
-statusFormEl.addEventListener('submit', (e) => {
+statusCustomInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    statusCustomInputEl.value = '';
+    statusCustomInputEl.hidden = true;
+    return;
+  }
+  if (e.key !== 'Enter') return;
   e.preventDefault();
-  saveStatus(statusInputEl.value, statusNoteInputEl.value);
+  const value = statusCustomInputEl.value.trim();
+  if (value) saveStatus(value, statusNoteInputEl.value);
 });
 
-statusClearBtn.addEventListener('click', clearStatus);
-privacyToggleEl.addEventListener('change', () => togglePrivacy(privacyToggleEl.checked));
+statusCustomInputEl.addEventListener('blur', () => {
+  if (!statusCustomInputEl.value.trim()) statusCustomInputEl.hidden = true;
+});
+
+statusNoteInputEl.addEventListener('blur', () => {
+  const activeBtn = statusToggleBtns.find((btn) => btn.classList.contains('bg-brass'));
+  const activeStatus = activeBtn === statusCustomToggleBtn
+    ? statusCustomInputEl.value.trim() || activeBtn.textContent
+    : activeBtn?.dataset.status;
+  if (activeStatus) saveStatus(activeStatus, statusNoteInputEl.value);
+});
+
+privacyToggleEl.addEventListener('click', togglePrivacy);
 
 async function signOut() {
   await supabase.auth.signOut();
