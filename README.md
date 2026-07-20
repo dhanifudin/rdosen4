@@ -8,8 +8,9 @@ dependency on `ada`; the two only share a Supabase project.
 ## 1. Set up the Supabase backend
 
 1. Create a Supabase project (or use an existing one).
-2. Open the SQL editor and run `supabase/schema.sql`. This creates a
-   dedicated **`dosen4` schema** (not `public`) containing:
+2. Open the SQL editor and run `supabase/schema.sql`. It's idempotent — safe
+   to re-run any time the file changes. This creates a dedicated **`dosen4`
+   schema** (not `public`) containing:
    - `users`, `devices` (the MAC allowlist), `presence`, `attendance_log`
    - `presence_board` — the public, name+status-only read view
    - `report_presence(...)` — a `SECURITY DEFINER` RPC, callable only by
@@ -18,6 +19,10 @@ dependency on `ada`; the two only share a Supabase project.
      `presence_board` — never the raw tables (no MAC addresses or
      identifiers are exposed publicly)
    - Adds `presence` to the `supabase_realtime` publication
+   - A trigger on `auth.users` that auto-creates a `dosen4.users` profile on
+     every Google sign-in, and `register_device`/`remove_device` RPCs that
+     let a signed-in `@polinema.ac.id` user manage their own devices — see
+     "Google sign-in setup" below.
 3. **Expose the `dosen4` schema**: Dashboard → Project Settings → API →
    "Exposed schemas" → add `dosen4`. PostgREST only serves schemas on this
    list, so skipping this step makes every REST/RPC call 404. (SQL
@@ -86,12 +91,38 @@ GitHub issues the HTTPS certificate once DNS and the `CNAME` file agree —
 this can take a few minutes after the record propagates. Check status
 under repo **Settings → Pages**.
 
-## Registering people & devices
+## Google sign-in setup (for device registration)
 
-For the MVP, add rows to `users` and `devices` directly via Supabase
-Studio's table editor (or `insert` statements like `supabase/seed.sql`).
-A self-service registration page (Supabase Auth + magic link) is a natural
-follow-up but out of scope for the first pass.
+`web/register.html` lets a signed-in user register their own device's MAC
+address (up to 5 per person). Google sign-in itself doesn't restrict by
+email domain — that's enforced by this app (client-side check for UX, and
+the `register_device` RPC as the real gate: any Google account can sign in
+and get a profile row, but only `@polinema.ac.id` accounts can actually
+register a device). Two one-time setup steps in external dashboards, not
+something this repo can do on its own:
+
+1. **Google Cloud Console** → create an OAuth 2.0 Client ID (APIs & Services
+   → Credentials → Create Credentials → OAuth client ID → Web application).
+   - Authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+     (find `<your-project-ref>` in the Supabase Project URL).
+   - Copy the generated **Client ID** and **Client Secret**.
+2. **Supabase Dashboard** → Authentication → Providers → **Google** → enable
+   it, paste the Client ID/Secret from step 1, save.
+3. **Supabase Dashboard** → Authentication → URL Configuration → **Redirect
+   URLs** → add:
+   - `https://dosen4.makinmudah.com/register.html`
+   - (optionally) the default `*.github.io` Pages URL as a fallback, if you
+     ever test before the custom domain is live.
+
+Once both are done, `register.html` "Sign in with Google" works end to end.
+No further code changes needed on this side — the `hd=polinema.ac.id` query
+param on the sign-in call just pre-filters Google's account picker to the
+org as a UX nicety; it isn't itself an access control (hence the app-level
+check described above).
+
+For bulk/admin registration (e.g. a legacy user with no Google account),
+add rows to `users`/`devices` directly via Supabase Studio's table editor
+or `insert` statements like `supabase/seed.sql` — unaffected by the above.
 
 ## Architecture recap
 

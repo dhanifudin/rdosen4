@@ -207,3 +207,136 @@ begin
     alter publication supabase_realtime add table dosen4.presence;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Self-service device registration via Google SSO (Supabase Auth).
+--
+-- Google OAuth alone doesn't enforce an email domain (that needs the app to
+-- be an "Internal" Google Workspace app, which isn't assumed here), so
+-- enforcement happens in this app layer: any Google account can sign in,
+-- get a profile row, and browse -- but only `auth_domain_ok` accounts
+-- (email ends with @polinema.ac.id) can register a device, checked inside
+-- register_device(). The frontend also checks client-side for fast/clean
+-- UX, but this RPC check is the real gate.
+-- ---------------------------------------------------------------------
+
+alter table dosen4.users
+  add column if not exists auth_domain_ok boolean not null default false;
+
+-- Auto-provision a dosen4.users profile (keyed by the Supabase Auth user
+-- id) the moment someone completes Google sign-in.
+create or replace function dosen4.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+begin
+  insert into dosen4.users (id, full_name, auth_domain_ok)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    (new.email ilike '%@polinema.ac.id')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function dosen4.handle_new_user();
+
+-- register_device / remove_device: the only way `authenticated` can write
+-- to dosen4.devices -- centralizes the domain check, MAC normalization,
+-- the per-user device cap, and a friendly duplicate-MAC message, instead
+-- of duplicating that logic in RLS WITH CHECK clauses.
+
+create or replace function dosen4.register_device(mac text, label text default null)
+returns dosen4.devices
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  domain_ok boolean;
+  normalized text;
+  device_count int;
+  new_device dosen4.devices;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select auth_domain_ok into domain_ok from dosen4.users where id = uid;
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can register a device.';
+  end if;
+
+  normalized := dosen4.normalize_mac(mac);
+  if normalized is null then
+    raise exception 'Invalid MAC address: %', mac;
+  end if;
+
+  select count(*) into device_count from dosen4.devices where user_id = uid;
+  if device_count >= 5 then
+    raise exception 'Device limit reached (max 5 per user).';
+  end if;
+
+  begin
+    insert into dosen4.devices (user_id, mac_address, label)
+    values (uid, normalized, label)
+    returning * into new_device;
+  exception when unique_violation then
+    raise exception 'This device is already registered.';
+  end;
+
+  return new_device;
+end;
+$$;
+
+revoke all on function dosen4.register_device(text, text) from public;
+grant execute on function dosen4.register_device(text, text) to authenticated;
+
+create or replace function dosen4.remove_device(device_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  delete from dosen4.devices where id = device_id and user_id = uid;
+  if not found then
+    raise exception 'Device not found.';
+  end if;
+end;
+$$;
+
+revoke all on function dosen4.remove_device(uuid) from public;
+grant execute on function dosen4.remove_device(uuid) to authenticated;
+
+-- RLS: authenticated users can see/update their own profile and see
+-- (not directly write) their own devices; writes go through the RPCs above.
+
+drop policy if exists "users can view own profile" on dosen4.users;
+create policy "users can view own profile" on dosen4.users
+  for select using (auth.uid() = id);
+
+drop policy if exists "users can update own profile" on dosen4.users;
+create policy "users can update own profile" on dosen4.users
+  for update using (auth.uid() = id) with check (auth.uid() = id);
+
+drop policy if exists "users can view own devices" on dosen4.devices;
+create policy "users can view own devices" on dosen4.devices
+  for select using (auth.uid() = user_id);
+
+grant select, update on dosen4.users to authenticated;
+grant select on dosen4.devices to authenticated;

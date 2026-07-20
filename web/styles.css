@@ -118,3 +118,105 @@ h1 {
   text-align: center;
   padding: 2rem 0;
 }
+
+nav {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+nav a {
+  color: inherit;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn:hover {
+  border-color: var(--muted);
+}
+
+.btn.primary {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+.btn.danger {
+  color: var(--absent);
+}
+
+.field {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.notice {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.notice.error {
+  color: var(--absent);
+  background: var(--absent-bg);
+}
+
+.notice.info {
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.device-row .mac {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.device-row .label {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.user-email {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

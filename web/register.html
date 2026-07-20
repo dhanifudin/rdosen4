@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Register Device — Attendance Board</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Register Device</h1>
+    </header>
+    <nav><a href="index.html">&larr; Back to board</a></nav>
+
+    <div id="notice"></div>
+
+    <div id="signed-out" class="card" hidden>
+      <p>Sign in with your <strong>@polinema.ac.id</strong> Google account to register a device.</p>
+      <button id="sign-in" class="btn primary">Sign in with Google</button>
+    </div>
+
+    <div id="signed-in" class="card" hidden>
+      <p class="user-email">Signed in as <span id="user-email"></span></p>
+      <button id="sign-out" class="btn">Sign out</button>
+    </div>
+
+    <div id="register-form-wrap" class="card" hidden>
+      <h2 style="font-size:1rem;margin-top:0;">Add a device</h2>
+      <form id="register-form">
+        <input id="mac-input" class="field" type="text" placeholder="MAC address (e.g. aa:bb:cc:dd:ee:ff)" autocomplete="off" required />
+        <input id="label-input" class="field" type="text" placeholder="Label (e.g. My laptop)" autocomplete="off" />
+        <button type="submit" class="btn primary">Register device</button>
+      </form>
+    </div>
+
+    <div id="devices-wrap" hidden>
+      <h2 style="font-size:1rem;">Your devices</h2>
+      <div id="devices-list"></div>
+    </div>
+  </div>
+
+  <script type="module" src="register.js"></script>
+</body>
+</html>
