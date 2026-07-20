@@ -1,5 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { supabase, configOk, REQUIRED_DOMAIN, signInWithGoogle, checkDomainOrSignOut } from './supabase-client.js';
 
 const noticeEl = document.getElementById('notice');
 const signedOutEl = document.getElementById('signed-out');
@@ -27,31 +26,16 @@ const labelInputEl = document.getElementById('label-input');
 const devicesWrapEl = document.getElementById('devices-wrap');
 const devicesListEl = document.getElementById('devices-list');
 
-const statusWrapEl = document.getElementById('status-wrap');
-const statusCurrentEl = document.getElementById('status-current');
-const statusCurrentTextEl = document.getElementById('status-current-text');
-const statusFormEl = document.getElementById('status-form');
-const statusInputEl = document.getElementById('status-input');
-const statusNoteInputEl = document.getElementById('status-note-input');
-const statusClearBtn = document.getElementById('status-clear');
-const privacyToggleEl = document.getElementById('privacy-toggle');
-
 const NOTICE_CLASSES = {
   error: 'text-sm px-4 py-3 rounded bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark border border-absentc/20 dark:border-absentcdark/20 mb-4',
   info: 'text-sm px-4 py-3 rounded bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark border border-present/20 dark:border-presentdark/20 mb-4',
 };
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
+if (!configOk) {
   noticeEl.innerHTML = `<p class="${NOTICE_CLASSES.error}">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to enable sign-in.</p>`;
   throw new Error('config.js still has placeholder Supabase credentials');
 }
 
-// All attendance objects live in the `dosen4` Postgres schema — see
-// ../supabase/schema.sql.
-const DB_SCHEMA = 'dosen4';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: DB_SCHEMA } });
-
-const REQUIRED_DOMAIN = '@polinema.ac.id';
 const MAC_RE = /^([0-9a-fA-F]{2}[:.\-]?){5}[0-9a-fA-F]{2}$/;
 const DETECT_POLL_MS = 2000;
 
@@ -70,14 +54,6 @@ function showNotice(message, kind = 'error') {
 
 function clearNotice() {
   noticeEl.innerHTML = '';
-}
-
-async function signIn() {
-  const redirectTo = window.location.origin + window.location.pathname;
-  await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo, queryParams: { hd: 'polinema.ac.id' } },
-  });
 }
 
 async function signOut() {
@@ -135,77 +111,6 @@ async function registerDevice(mac, label) {
   labelInputEl.value = '';
   await loadDevices();
 }
-
-// --- Manual status/note + privacy mode --------------------------------
-
-async function loadStatus() {
-  const { data, error } = await supabase
-    .from('users')
-    .select('manual_status, manual_note, privacy_mode')
-    .maybeSingle();
-  if (error) {
-    console.error(error);
-    return;
-  }
-  if (!data) return;
-
-  if (data.manual_status) {
-    statusCurrentEl.hidden = false;
-    statusCurrentTextEl.textContent = data.manual_note
-      ? `${data.manual_status} — ${data.manual_note}`
-      : data.manual_status;
-    statusInputEl.value = data.manual_status;
-    statusNoteInputEl.value = data.manual_note || '';
-  } else {
-    statusCurrentEl.hidden = true;
-    statusInputEl.value = '';
-    statusNoteInputEl.value = '';
-  }
-
-  privacyToggleEl.checked = Boolean(data.privacy_mode);
-}
-
-async function saveStatus(status, note) {
-  const { error } = await supabase.rpc('set_manual_status', {
-    p_status: status.trim() || null,
-    p_note: note.trim() || null,
-  });
-  if (error) {
-    showNotice(error.message);
-    return;
-  }
-  clearNotice();
-  await loadStatus();
-}
-
-async function clearStatus() {
-  await saveStatus('', '');
-}
-
-async function togglePrivacy(enabled) {
-  const { error } = await supabase.rpc('set_privacy_mode', { p_enabled: enabled });
-  if (error) {
-    showNotice(error.message);
-    privacyToggleEl.checked = !enabled; // revert the checkbox on failure
-    return;
-  }
-  clearNotice();
-}
-
-document.querySelectorAll('.status-preset').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    statusInputEl.value = btn.dataset.status;
-    statusInputEl.focus();
-  });
-});
-
-statusFormEl.addEventListener('submit', (e) => {
-  e.preventDefault();
-  saveStatus(statusInputEl.value, statusNoteInputEl.value);
-});
-
-statusClearBtn.addEventListener('click', clearStatus);
-privacyToggleEl.addEventListener('change', () => togglePrivacy(privacyToggleEl.checked));
 
 // --- Auto-detect via Wi-Fi reconnect ---------------------------------
 
@@ -298,23 +203,21 @@ detectCancelBtn.addEventListener('click', () => {
 // -----------------------------------------------------------------------
 
 async function render(session) {
+  const email = await checkDomainOrSignOut(session);
+
   if (!session) {
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
-    statusWrapEl.hidden = true;
     detectWrapEl.hidden = true;
     manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
     return;
   }
 
-  const email = session.user.email || '';
-  if (!email.toLowerCase().endsWith(REQUIRED_DOMAIN)) {
-    showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat mendaftarkan perangkat. Anda masuk sebagai ${email}.`);
-    await supabase.auth.signOut();
+  if (!email) {
+    showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat mendaftarkan perangkat. Anda masuk sebagai ${session.user.email}.`);
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
-    statusWrapEl.hidden = true;
     detectWrapEl.hidden = true;
     manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
@@ -324,17 +227,15 @@ async function render(session) {
   clearNotice();
   signedOutEl.hidden = true;
   signedInEl.hidden = false;
-  statusWrapEl.hidden = false;
   detectWrapEl.hidden = false;
   manualFallbackEl.hidden = false;
   devicesWrapEl.hidden = false;
   userEmailEl.textContent = email;
   resetDetectUI();
-  await loadStatus();
   await loadDevices();
 }
 
-signInBtn.addEventListener('click', signIn);
+signInBtn.addEventListener('click', signInWithGoogle);
 signOutBtn.addEventListener('click', signOut);
 formEl.addEventListener('submit', (e) => {
   e.preventDefault();

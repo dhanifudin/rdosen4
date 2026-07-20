@@ -1,5 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { supabase, configOk, DB_SCHEMA, REQUIRED_DOMAIN, signInWithGoogle, checkDomainOrSignOut } from './supabase-client.js';
 
 const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
@@ -7,16 +6,38 @@ const searchEl = document.getElementById('search');
 const presentCountEl = document.getElementById('present-count');
 const totalCountEl = document.getElementById('total-count');
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
+const noticeEl = document.getElementById('notice');
+const signInLinkEl = document.getElementById('sign-in-link');
+const signedInInfoEl = document.getElementById('signed-in-info');
+const userEmailEl = document.getElementById('user-email');
+const signOutBtn = document.getElementById('sign-out');
+
+const statusWrapEl = document.getElementById('status-wrap');
+const statusCurrentEl = document.getElementById('status-current');
+const statusCurrentTextEl = document.getElementById('status-current-text');
+const statusFormEl = document.getElementById('status-form');
+const statusInputEl = document.getElementById('status-input');
+const statusNoteInputEl = document.getElementById('status-note-input');
+const statusClearBtn = document.getElementById('status-clear');
+const privacyToggleEl = document.getElementById('privacy-toggle');
+
+if (!configOk) {
   boardEl.innerHTML = '<p class="text-muted dark:text-muteddark text-center py-8 col-span-full">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to load the board.</p>';
   throw new Error('config.js still has placeholder Supabase credentials');
 }
 
-// All attendance objects live in the `dosen4` Postgres schema (not
-// `public`) — see ../supabase/schema.sql. It must be added to Supabase's
-// "Exposed schemas" (Project Settings -> API) or every call below 404s.
-const DB_SCHEMA = 'dosen4';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: DB_SCHEMA } });
+const NOTICE_CLASSES = {
+  error: 'text-sm px-4 py-3 rounded bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark border border-absentc/20 dark:border-absentcdark/20 mb-4',
+  info: 'text-sm px-4 py-3 rounded bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark border border-present/20 dark:border-presentdark/20 mb-4',
+};
+
+function showNotice(message, kind = 'error') {
+  noticeEl.innerHTML = `<p class="${NOTICE_CLASSES[kind]}">${escapeHtml(message)}</p>`;
+}
+
+function clearNotice() {
+  noticeEl.innerHTML = '';
+}
 
 /** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null, photo_url: string|null, note: string|null}>} */
 const rows = new Map();
@@ -51,14 +72,22 @@ function initials(name) {
 }
 
 // Status is open-ended (a manual status can be any short text a lecturer
-// chooses), not a strict present/absent/private enum -- only these three
-// values get their own dedicated tab treatment; anything else is a manual
-// override and gets a neutral "custom status" tab showing the text as-is.
+// chooses), not a strict enum. present/absent/private get their own
+// dedicated tab treatment; the 4 known presets each get a distinct color;
+// anything else (custom-typed text) falls back to a generic brass tab.
+const PRESET_TAB_CLASSES = {
+  sibuk: 'bg-sibuksoft dark:bg-sibuksoftdark text-sibuk dark:text-sibukdark',
+  'tugas belajar': 'bg-tugasbelajarsoft dark:bg-tugasbelajarsoftdark text-tugasbelajar dark:text-tugasbelajardark',
+  cuti: 'bg-cutisoft dark:bg-cutisoftdark text-cuti dark:text-cutidark',
+  rapat: 'bg-rapatsoft dark:bg-rapatsoftdark text-rapat dark:text-rapatdark',
+};
+
 function statusTab(status) {
   if (status === 'present') return { label: 'MASUK', classes: 'bg-presentsoft dark:bg-presentsoftdark text-present dark:text-presentdark' };
   if (status === 'absent') return { label: 'KELUAR', classes: 'bg-absentsoft dark:bg-absentsoftdark text-absentc dark:text-absentcdark' };
   if (status === 'private') return { label: 'PRIBADI', classes: 'bg-surface2 dark:bg-surfacedark2 text-muted dark:text-muteddark' };
-  return { label: status.toUpperCase(), classes: 'bg-brasssoft dark:bg-brasssoftdark text-brass dark:text-brassdark' };
+  const preset = PRESET_TAB_CLASSES[status.toLowerCase()];
+  return { label: status.toUpperCase(), classes: preset || 'bg-brasssoft dark:bg-brasssoftdark text-brass dark:text-brassdark' };
 }
 
 function seenLine(r) {
@@ -142,6 +171,119 @@ function subscribeRealtime() {
     })
     .subscribe();
 }
+
+// --- Sign-in + self-service manual status/note + privacy mode ---------
+
+async function loadStatus() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('manual_status, manual_note, privacy_mode')
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    return;
+  }
+  if (!data) return;
+
+  if (data.manual_status) {
+    statusCurrentEl.hidden = false;
+    statusCurrentTextEl.textContent = data.manual_note
+      ? `${data.manual_status} — ${data.manual_note}`
+      : data.manual_status;
+    statusInputEl.value = data.manual_status;
+    statusNoteInputEl.value = data.manual_note || '';
+  } else {
+    statusCurrentEl.hidden = true;
+    statusInputEl.value = '';
+    statusNoteInputEl.value = '';
+  }
+
+  privacyToggleEl.checked = Boolean(data.privacy_mode);
+}
+
+async function saveStatus(status, note) {
+  const { error } = await supabase.rpc('set_manual_status', {
+    p_status: status.trim() || null,
+    p_note: note.trim() || null,
+  });
+  if (error) {
+    showNotice(error.message);
+    return;
+  }
+  clearNotice();
+  await loadStatus();
+}
+
+async function clearStatus() {
+  await saveStatus('', '');
+}
+
+async function togglePrivacy(enabled) {
+  const { error } = await supabase.rpc('set_privacy_mode', { p_enabled: enabled });
+  if (error) {
+    showNotice(error.message);
+    privacyToggleEl.checked = !enabled; // revert the checkbox on failure
+    return;
+  }
+  clearNotice();
+}
+
+document.querySelectorAll('.status-preset').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    statusInputEl.value = btn.dataset.status;
+    statusInputEl.focus();
+  });
+});
+
+statusFormEl.addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveStatus(statusInputEl.value, statusNoteInputEl.value);
+});
+
+statusClearBtn.addEventListener('click', clearStatus);
+privacyToggleEl.addEventListener('change', () => togglePrivacy(privacyToggleEl.checked));
+
+async function signOut() {
+  await supabase.auth.signOut();
+  renderAuth(null);
+}
+
+async function renderAuth(session) {
+  const email = await checkDomainOrSignOut(session);
+
+  if (!session) {
+    signInLinkEl.hidden = false;
+    signedInInfoEl.hidden = true;
+    statusWrapEl.hidden = true;
+    return;
+  }
+
+  if (!email) {
+    showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat memperbarui status. Anda masuk sebagai ${session.user.email}.`);
+    signInLinkEl.hidden = false;
+    signedInInfoEl.hidden = true;
+    statusWrapEl.hidden = true;
+    return;
+  }
+
+  clearNotice();
+  signInLinkEl.hidden = true;
+  signedInInfoEl.hidden = false;
+  statusWrapEl.hidden = false;
+  userEmailEl.textContent = email;
+  await loadStatus();
+}
+
+signInLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  signInWithGoogle();
+});
+signOutBtn.addEventListener('click', signOut);
+
+supabase.auth.onAuthStateChange((_event, session) => renderAuth(session));
+supabase.auth.getSession().then(({ data }) => renderAuth(data.session));
+
+// ------------------------------------------------------------------------
 
 searchEl.addEventListener('input', render);
 setInterval(render, 15000); // keep relative timestamps fresh even with no new events

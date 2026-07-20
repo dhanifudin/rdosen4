@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Daftarkan Perangkat — Ruang Dosen 4</title>
+  <title>Perangkat Saya — Ruang Dosen 4</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -37,7 +37,7 @@
   <div class="max-w-xl mx-auto px-5 py-10 pb-20">
 
     <header class="pb-6 border-b border-line dark:border-linedark mb-6">
-      <h1 class="font-plate text-2xl font-semibold tracking-tight [text-wrap:balance]">Daftarkan Perangkat</h1>
+      <h1 class="font-plate text-2xl font-semibold tracking-tight [text-wrap:balance]">Perangkat Saya</h1>
       <p class="mt-1 text-sm text-muted dark:text-muteddark">Ruang Dosen 4 &middot; Jurusan Teknologi Informasi</p>
     </header>
 
@@ -55,37 +55,6 @@
     <div id="signed-in" class="flex items-center justify-between gap-3 px-4 py-3 bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark rounded mb-4 text-sm" hidden>
       <p class="text-muted dark:text-muteddark truncate">Masuk sebagai <span id="user-email" class="text-ink dark:text-inkdark font-medium"></span></p>
       <button id="sign-out" class="shrink-0 px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface dark:hover:bg-surfacedark">Keluar</button>
-    </div>
-
-    <div id="status-wrap" class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mb-4" hidden>
-      <h2 class="font-plate text-base font-semibold mb-3">Status Saya</h2>
-
-      <p id="status-current" hidden class="mb-3 px-3 py-2 rounded bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark text-sm">
-        Status saat ini: <strong id="status-current-text"></strong>
-      </p>
-
-      <div class="flex flex-wrap gap-2 mb-3">
-        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Sibuk">Sibuk</button>
-        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Tugas Belajar">Tugas Belajar</button>
-        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Cuti">Cuti</button>
-        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Rapat">Rapat</button>
-      </div>
-
-      <form id="status-form">
-        <input id="status-input" type="text" placeholder="Status kustom (kosongkan untuk kembali otomatis)" autocomplete="off" maxlength="40"
-          class="w-full px-3.5 py-2.5 mb-2 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
-        <input id="status-note-input" type="text" placeholder="Catatan (opsional)" autocomplete="off" maxlength="280"
-          class="w-full px-3.5 py-2.5 mb-3 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
-        <div class="flex flex-wrap gap-2">
-          <button type="submit" class="px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Simpan status</button>
-          <button type="button" id="status-clear" class="px-3 py-2.5 rounded border border-line dark:border-linedark text-sm font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2">Kembali ke deteksi otomatis</button>
-        </div>
-      </form>
-
-      <label class="flex items-start gap-2.5 mt-4 pt-4 border-t border-line dark:border-linedark text-sm cursor-pointer">
-        <input id="privacy-toggle" type="checkbox" class="mt-0.5 accent-brass dark:accent-brassdark" />
-        <span>Sembunyikan status deteksi otomatis saya dari publik. Status manual di atas tetap ditampilkan jika diisi.</span>
-      </label>
     </div>
 
     <div id="detect-wrap" class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mb-4" hidden>
@@ -141,6 +110,6 @@
     </div>
   </div>
 
-  <script type="module" src="register.js"></script>
+  <script type="module" src="devices.js"></script>
 </body>
 </html>

@@ -92,15 +92,27 @@ GitHub issues the HTTPS certificate once DNS and the `CNAME` file agree —
 this can take a few minutes after the record propagates. Check status
 under repo **Settings → Pages**.
 
-## Google sign-in setup (for device registration)
+## Google sign-in setup (status updates + device registration)
 
-`web/register.html` lets a signed-in user register their own device's MAC
-address (up to 5 per person). Google sign-in itself doesn't restrict by
-email domain — that's enforced by this app (client-side check for UX, and
-the `register_device` RPC as the real gate: any Google account can sign in
-and get a profile row, but only `@polinema.ac.id` accounts can actually
-register a device). Two one-time setup steps in external dashboards, not
-something this repo can do on its own:
+Sign-in is used in two places, both `@polinema.ac.id`-gated:
+- **`web/index.html`** (the public board itself) — a small, low-key "Masuk"
+  link in the header corner (deliberately not a prominent call-to-action,
+  since the board is meant to stay public/anonymous by default). Once
+  signed in, an inline "Status Saya" panel appears letting a lecturer set
+  their own manual status (Sibuk/Tugas Belajar/Cuti/Rapat presets, or
+  custom text) + a note, and toggle a privacy mode that hides their live
+  auto-detected presence from the public board (an explicit manual status
+  still shows even with privacy on).
+- **`web/devices.html`** (not linked from `index.html`, `noindex`, direct
+  URL only — share it with lecturers separately) — registering the actual
+  device MAC addresses.
+
+Google sign-in itself doesn't restrict by email domain — that's enforced
+by this app (client-side check for UX, and the RPCs as the real gate: any
+Google account can sign in and get a profile row, but only
+`@polinema.ac.id` accounts can actually change anything). Two one-time
+setup steps in external dashboards, not something this repo can do on its
+own:
 
 1. **Google Cloud Console** → create an OAuth 2.0 Client ID (APIs & Services
    → Credentials → Create Credentials → OAuth client ID → Web application).
@@ -110,16 +122,21 @@ something this repo can do on its own:
 2. **Supabase Dashboard** → Authentication → Providers → **Google** → enable
    it, paste the Client ID/Secret from step 1, save.
 3. **Supabase Dashboard** → Authentication → URL Configuration → **Redirect
-   URLs** → add:
-   - `https://dosen4.makinmudah.com/register.html`
+   URLs** → add the wildcard:
+   - `https://dosen4.makinmudah.com/**`
    - (optionally) the default `*.github.io` Pages URL as a fallback, if you
      ever test before the custom domain is live.
 
-Once both are done, `register.html` "Sign in with Google" works end to end.
-No further code changes needed on this side — the `hd=polinema.ac.id` query
-param on the sign-in call just pre-filters Google's account picker to the
-org as a UX nicety; it isn't itself an access control (hence the app-level
-check described above).
+   Sign-in can now originate from either page (`redirectTo` is computed
+   dynamically per-page as `location.origin + location.pathname`), so a
+   single per-page entry no longer covers it — the wildcard covers both
+   (and any future page) in one entry.
+
+Once both are done, "Masuk"/"Masuk dengan Google" works end to end on
+both pages. No further code changes needed on this side — the
+`hd=polinema.ac.id` query param on the sign-in call just pre-filters
+Google's account picker to the org as a UX nicety; it isn't itself an
+access control (hence the app-level check described above).
 
 For bulk/admin registration (e.g. a legacy user with no Google account),
 add rows to `users`/`devices` directly via Supabase Studio's table editor
@@ -127,7 +144,7 @@ or `insert` statements like `supabase/seed.sql` — unaffected by the above.
 
 ### Auto-detected registration (no typing, no manual MAC entry)
 
-The primary flow on `register.html` doesn't ask for a MAC at all: the user
+The primary flow on `devices.html` doesn't ask for a MAC at all: the user
 clicks "Detect my device", turns Wi-Fi off then back on per the on-screen
 instructions, and the currently-running `ada` agent (which has the LAN
 visibility a browser never can) correlates "who just started a detection

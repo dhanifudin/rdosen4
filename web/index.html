@@ -23,6 +23,16 @@
             presentsoft: '#dcece1', presentsoftdark: '#17271e',
             absentc: '#8a5a3b', absentcdark: '#d99b6c',
             absentsoft: '#f1e6dc', absentsoftdark: '#2a1f16',
+            /* Per-status colors for the 4 known manual-status presets --
+               anything else (custom-typed status) falls back to brass. */
+            sibuk: '#a35a1f', sibukdark: '#e0a05c',
+            sibuksoft: '#f5e3d3', sibuksoftdark: '#3a2515',
+            tugasbelajar: '#3f5a8a', tugasbelajardark: '#8aa8d9',
+            tugasbelajarsoft: '#dde5f2', tugasbelajarsoftdark: '#1c2536',
+            cuti: '#7a4a6b', cutidark: '#c98fc0',
+            cutisoft: '#f0e0ec', cutisoftdark: '#33212f',
+            rapat: '#2a6b6b', rapatdark: '#63c0c0',
+            rapatsoft: '#dcecec', rapatsoftdark: '#173030',
           },
           fontFamily: {
             plate: ['"Iowan Old Style"', '"Palatino Linotype"', 'Georgia', 'serif'],
@@ -35,18 +45,63 @@
 <body class="bg-paper dark:bg-paperdark text-ink dark:text-inkdark min-h-screen">
   <div class="max-w-4xl mx-auto px-5 py-10 pb-20">
 
-    <header class="flex flex-wrap items-end justify-between gap-4 pb-6 border-b border-line dark:border-linedark mb-8">
+    <header class="flex flex-wrap items-end justify-between gap-4 pb-6 border-b border-line dark:border-linedark mb-6">
       <div>
         <h1 class="font-plate text-3xl font-semibold tracking-tight [text-wrap:balance]">Ruang Dosen 4</h1>
         <p class="mt-1 text-sm text-muted dark:text-muteddark">
           Jurusan Teknologi Informasi <span class="text-brass dark:text-brassdark">&middot;</span> live via jaringan Wi-Fi kampus
         </p>
       </div>
-      <div class="flex items-baseline gap-1 [font-variant-numeric:tabular-nums]">
-        <span id="present-count" class="text-3xl font-bold text-present dark:text-presentdark">0</span>
-        <span id="total-count" class="text-sm text-muted dark:text-muteddark">/ 0 hadir sekarang</span>
+      <div class="text-right">
+        <div class="flex items-baseline gap-1 [font-variant-numeric:tabular-nums]">
+          <span id="present-count" class="text-3xl font-bold text-present dark:text-presentdark">0</span>
+          <span id="total-count" class="text-sm text-muted dark:text-muteddark">/ 0 hadir sekarang</span>
+        </div>
+        <div class="mt-1 text-xs text-muted dark:text-muteddark">
+          <a href="#" id="sign-in-link" class="hover:underline hover:text-ink dark:hover:text-inkdark">Masuk</a>
+          <span id="signed-in-info" hidden>
+            <span id="user-email"></span> &middot; <button id="sign-out" class="hover:underline">Keluar</button>
+          </span>
+        </div>
       </div>
     </header>
+
+    <div id="notice"></div>
+
+    <div id="status-wrap" class="p-5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm mb-6" hidden>
+      <h2 class="font-plate text-base font-semibold mb-3">Status Saya</h2>
+
+      <p id="status-current" hidden class="mb-3 px-3 py-2 rounded bg-surface2 dark:bg-surfacedark2 border border-line dark:border-linedark text-sm">
+        Status saat ini: <strong id="status-current-text"></strong>
+      </p>
+
+      <div class="flex flex-wrap gap-2 mb-3">
+        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Sibuk">Sibuk</button>
+        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Tugas Belajar">Tugas Belajar</button>
+        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Cuti">Cuti</button>
+        <button type="button" class="status-preset px-3 py-1.5 rounded border border-line dark:border-linedark text-xs font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2" data-status="Rapat">Rapat</button>
+      </div>
+
+      <form id="status-form">
+        <input id="status-input" type="text" placeholder="Status kustom (kosongkan untuk kembali otomatis)" autocomplete="off" maxlength="40"
+          class="w-full px-3.5 py-2.5 mb-2 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
+        <input id="status-note-input" type="text" placeholder="Catatan (opsional)" autocomplete="off" maxlength="280"
+          class="w-full px-3.5 py-2.5 mb-3 rounded border border-line dark:border-linedark bg-surface dark:bg-surfacedark text-sm placeholder:text-muted dark:placeholder:text-muteddark focus:outline-none focus:ring-2 focus:ring-brass dark:focus:ring-brassdark" />
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="px-4 py-2.5 rounded font-semibold text-sm bg-brass dark:bg-brassdark text-white dark:text-paperdark">Simpan status</button>
+          <button type="button" id="status-clear" class="px-3 py-2.5 rounded border border-line dark:border-linedark text-sm font-semibold hover:bg-surface2 dark:hover:bg-surfacedark2">Kembali ke deteksi otomatis</button>
+        </div>
+      </form>
+
+      <label class="flex items-start gap-2.5 mt-4 pt-4 border-t border-line dark:border-linedark text-sm cursor-pointer">
+        <input id="privacy-toggle" type="checkbox" class="mt-0.5 accent-brass dark:accent-brassdark" />
+        <span>Sembunyikan status deteksi otomatis saya dari publik. Status manual di atas tetap ditampilkan jika diisi.</span>
+      </label>
+
+      <p class="mt-4 pt-4 border-t border-line dark:border-linedark text-xs text-muted dark:text-muteddark">
+        Untuk mendaftarkan perangkat, kunjungi <a href="devices.html" class="text-brass dark:text-brassdark hover:underline">halaman perangkat</a>.
+      </p>
+    </div>
 
     <div class="mb-6">
       <input
