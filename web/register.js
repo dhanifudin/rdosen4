@@ -5,14 +5,27 @@ const noticeEl = document.getElementById('notice');
 const signedOutEl = document.getElementById('signed-out');
 const signedInEl = document.getElementById('signed-in');
 const userEmailEl = document.getElementById('user-email');
-const formWrapEl = document.getElementById('register-form-wrap');
+const signInBtn = document.getElementById('sign-in');
+const signOutBtn = document.getElementById('sign-out');
+
+const detectWrapEl = document.getElementById('detect-wrap');
+const detectIdleEl = document.getElementById('detect-idle');
+const detectActiveEl = document.getElementById('detect-active');
+const detectLabelInputEl = document.getElementById('detect-label-input');
+const detectStartBtn = document.getElementById('detect-start');
+const detectStep2El = document.getElementById('detect-step2');
+const detectConfirmOffBtn = document.getElementById('detect-confirm-off');
+const detectWaitingEl = document.getElementById('detect-waiting');
+const detectCountdownEl = document.getElementById('detect-countdown');
+const detectCancelBtn = document.getElementById('detect-cancel');
+
+const manualFallbackEl = document.getElementById('manual-fallback');
 const formEl = document.getElementById('register-form');
 const macInputEl = document.getElementById('mac-input');
 const labelInputEl = document.getElementById('label-input');
+
 const devicesWrapEl = document.getElementById('devices-wrap');
 const devicesListEl = document.getElementById('devices-list');
-const signInBtn = document.getElementById('sign-in');
-const signOutBtn = document.getElementById('sign-out');
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-ANON')) {
   noticeEl.innerHTML = '<p class="notice error">Set SUPABASE_URL and SUPABASE_ANON_KEY in web/config.js to enable sign-in.</p>';
@@ -26,6 +39,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: D
 
 const REQUIRED_DOMAIN = '@polinema.ac.id';
 const MAC_RE = /^([0-9a-fA-F]{2}[:.\-]?){5}[0-9a-fA-F]{2}$/;
+const DETECT_POLL_MS = 2000;
+
+let detectPollTimer = null;
+let detectCountdownTimer = null;
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({
@@ -50,6 +67,7 @@ async function signIn() {
 }
 
 async function signOut() {
+  stopDetection();
   await supabase.auth.signOut();
   render(null);
 }
@@ -104,11 +122,102 @@ async function registerDevice(mac, label) {
   await loadDevices();
 }
 
+// --- Auto-detect via Wi-Fi reconnect ---------------------------------
+
+function resetDetectUI() {
+  stopDetection();
+  detectIdleEl.hidden = false;
+  detectActiveEl.hidden = true;
+  detectStep2El.hidden = true;
+  detectWaitingEl.hidden = true;
+}
+
+function showDetectStep2() {
+  detectIdleEl.hidden = true;
+  detectActiveEl.hidden = false;
+  detectStep2El.hidden = false;
+  detectWaitingEl.hidden = true;
+}
+
+function showDetectWaiting() {
+  detectStep2El.hidden = true;
+  detectWaitingEl.hidden = false;
+}
+
+function stopDetection() {
+  if (detectPollTimer) { clearInterval(detectPollTimer); detectPollTimer = null; }
+  if (detectCountdownTimer) { clearInterval(detectCountdownTimer); detectCountdownTimer = null; }
+}
+
+async function startDetection() {
+  const label = detectLabelInputEl.value.trim() || null;
+  const { data, error } = await supabase.rpc('start_detection_window', { p_label: label });
+  if (error) {
+    showNotice(error.message);
+    resetDetectUI();
+    return;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  const windowId = row.id;
+  const expiresAt = new Date(row.expires_at).getTime();
+
+  clearNotice();
+  showDetectWaiting();
+
+  const updateCountdown = () => {
+    const secs = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+    detectCountdownEl.textContent = `${secs}s remaining`;
+    if (secs <= 0) {
+      stopDetection();
+      showNotice('No new device detected — make sure you turned Wi-Fi off before starting, then try again.');
+      resetDetectUI();
+    }
+  };
+  updateCountdown();
+  detectCountdownTimer = setInterval(updateCountdown, 1000);
+
+  detectPollTimer = setInterval(async () => {
+    const { data: win, error: pollErr } = await supabase
+      .from('detection_windows')
+      .select('status')
+      .eq('id', windowId)
+      .maybeSingle();
+    if (pollErr) {
+      console.error(pollErr);
+      return;
+    }
+    if (!win || win.status === 'open') return;
+
+    stopDetection();
+    if (win.status === 'resolved') {
+      showNotice('Device registered!', 'info');
+      resetDetectUI();
+      await loadDevices();
+    } else if (win.status === 'ambiguous') {
+      showNotice('Another device joined the network at the same moment — please try again.');
+      resetDetectUI();
+    } else {
+      showNotice('No new device detected — make sure you turned Wi-Fi off before starting, then try again.');
+      resetDetectUI();
+    }
+  }, DETECT_POLL_MS);
+}
+
+detectStartBtn.addEventListener('click', showDetectStep2);
+detectConfirmOffBtn.addEventListener('click', startDetection);
+detectCancelBtn.addEventListener('click', () => {
+  clearNotice();
+  resetDetectUI();
+});
+
+// -----------------------------------------------------------------------
+
 async function render(session) {
   if (!session) {
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
-    formWrapEl.hidden = true;
+    detectWrapEl.hidden = true;
+    manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
     return;
   }
@@ -119,7 +228,8 @@ async function render(session) {
     await supabase.auth.signOut();
     signedOutEl.hidden = false;
     signedInEl.hidden = true;
-    formWrapEl.hidden = true;
+    detectWrapEl.hidden = true;
+    manualFallbackEl.hidden = true;
     devicesWrapEl.hidden = true;
     return;
   }
@@ -127,9 +237,11 @@ async function render(session) {
   clearNotice();
   signedOutEl.hidden = true;
   signedInEl.hidden = false;
-  formWrapEl.hidden = false;
+  detectWrapEl.hidden = false;
+  manualFallbackEl.hidden = false;
   devicesWrapEl.hidden = false;
   userEmailEl.textContent = email;
+  resetDetectUI();
   await loadDevices();
 }
 

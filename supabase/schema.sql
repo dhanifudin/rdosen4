@@ -340,3 +340,214 @@ create policy "users can view own devices" on dosen4.devices
 
 grant select, update on dosen4.users to authenticated;
 grant select on dosen4.devices to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Auto-detected device registration: correlate "who just started a
+-- detection window" with "what MAC just freshly appeared on the LAN",
+-- reported by the ada agent (which has the LAN visibility a browser
+-- never can). At most one detection window is open globally at a time
+-- (enforced by the partial unique index below), which is what lets a
+-- single newly-appearing MAC be attributed unambiguously.
+--
+-- Critical UX ordering (enforced by the frontend copy, not by SQL): the
+-- user must turn Wi-Fi OFF before/as they start a window, then back on a
+-- few seconds later. The first observation after a window opens becomes
+-- the "baseline" (assumed not to be the registrant); anything unregistered
+-- that appears afterwards is a candidate. If they're still connected when
+-- they click start, their own MAC lands in the baseline and can never
+-- become a candidate.
+-- ---------------------------------------------------------------------
+
+create table if not exists dosen4.detection_windows (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references dosen4.users(id) on delete cascade,
+  label text,
+  status text not null default 'open' check (status in ('open', 'resolved', 'ambiguous', 'expired')),
+  baseline_macs text[],
+  candidate_macs text[] not null default '{}',
+  resolved_device_id uuid references dosen4.devices(id),
+  started_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '120 seconds'
+);
+
+-- A partial unique index on a constant expression: every qualifying row
+-- indexes to the same value, so at most one row total can ever have
+-- status = 'open'. This is the single-global-window guarantee.
+create unique index if not exists one_open_detection_window
+  on dosen4.detection_windows ((true))
+  where status = 'open';
+
+alter table dosen4.detection_windows enable row level security;
+
+drop policy if exists "users can view own detection window" on dosen4.detection_windows;
+create policy "users can view own detection window" on dosen4.detection_windows
+  for select using (auth.uid() = user_id);
+
+grant select on dosen4.detection_windows to authenticated;
+
+create or replace function dosen4.start_detection_window(p_label text default null)
+returns table(id uuid, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  uid uuid := auth.uid();
+  domain_ok boolean;
+  device_count int;
+  new_id uuid;
+  new_expires timestamptz;
+begin
+  if uid is null then
+    raise exception 'Not signed in.';
+  end if;
+
+  select u.auth_domain_ok into domain_ok from dosen4.users u where u.id = uid;
+  if coalesce(domain_ok, false) = false then
+    raise exception 'Only @polinema.ac.id accounts can register a device.';
+  end if;
+
+  select count(*) into device_count from dosen4.devices where user_id = uid;
+  if device_count >= 5 then
+    raise exception 'Device limit reached (max 5 per user).';
+  end if;
+
+  begin
+    insert into dosen4.detection_windows (user_id, label)
+    values (uid, p_label)
+    returning detection_windows.id, detection_windows.expires_at into new_id, new_expires;
+  exception when unique_violation then
+    raise exception 'Someone else is registering a device right now -- please try again in a minute.';
+  end;
+
+  return query select new_id, new_expires;
+end;
+$$;
+
+revoke all on function dosen4.start_detection_window(text) from public;
+grant execute on function dosen4.start_detection_window(text) to authenticated;
+
+-- Called by the ada agent (service_role) on every scan cycle. A no-op
+-- when no window is open. Returns whether a window is open and how many
+-- seconds remain, so the agent can decide its next sleep interval without
+-- a second round-trip.
+create or replace function dosen4.observe_macs_for_detection(p_macs text[])
+returns table(window_open boolean, seconds_remaining numeric)
+language plpgsql
+security definer
+set search_path = dosen4
+as $$
+declare
+  w dosen4.detection_windows;
+  normalized text[];
+  unregistered text[];
+  new_candidates text[];
+  domain_ok boolean;
+  device_count int;
+  new_device_id uuid;
+begin
+  select array_agg(distinct nm) into normalized
+  from (select dosen4.normalize_mac(m) as nm from unnest(p_macs) as m) s
+  where nm is not null;
+
+  select * into w from dosen4.detection_windows where status = 'open' limit 1;
+
+  if w is null then
+    return query select false, 0::numeric;
+    return;
+  end if;
+
+  if w.expires_at <= now() then
+    update dosen4.detection_windows set status = 'expired' where id = w.id;
+    return query select false, 0::numeric;
+    return;
+  end if;
+
+  -- MACs not already claimed by anyone are the only ones interesting here.
+  select coalesce(array_agg(m), '{}') into unregistered
+  from unnest(coalesce(normalized, '{}')) as m
+  where not exists (select 1 from dosen4.devices d where d.mac_address = m);
+
+  if w.baseline_macs is null then
+    -- First observation since the window opened: whatever's already
+    -- present is the baseline, not a match (the registrant hasn't
+    -- reconnected yet).
+    update dosen4.detection_windows set baseline_macs = unregistered where id = w.id;
+    return query select true, extract(epoch from (w.expires_at - now()));
+    return;
+  end if;
+
+  -- Anything unregistered, not in the baseline, and not already recorded.
+  select coalesce(array_agg(m), '{}') into new_candidates
+  from unnest(unregistered) as m
+  where m <> all(w.baseline_macs) and m <> all(w.candidate_macs);
+
+  if array_length(new_candidates, 1) > 0 then
+    update dosen4.detection_windows
+    set candidate_macs = candidate_macs || new_candidates
+    where id = w.id
+    returning * into w;
+  end if;
+
+  if array_length(w.candidate_macs, 1) = 1 then
+    select auth_domain_ok into domain_ok from dosen4.users where id = w.user_id;
+    if coalesce(domain_ok, false) = false then
+      update dosen4.detection_windows set status = 'ambiguous' where id = w.id;
+      return query select false, 0::numeric;
+      return;
+    end if;
+
+    select count(*) into device_count from dosen4.devices where user_id = w.user_id;
+    if device_count >= 5 then
+      update dosen4.detection_windows set status = 'ambiguous' where id = w.id;
+      return query select false, 0::numeric;
+      return;
+    end if;
+
+    begin
+      insert into dosen4.devices (user_id, mac_address, label)
+      values (w.user_id, w.candidate_macs[1], w.label)
+      returning devices.id into new_device_id;
+    exception when unique_violation then
+      update dosen4.detection_windows set status = 'ambiguous' where id = w.id;
+      return query select false, 0::numeric;
+      return;
+    end;
+
+    update dosen4.detection_windows
+    set status = 'resolved', resolved_device_id = new_device_id
+    where id = w.id;
+    return query select false, 0::numeric;
+    return;
+  elsif array_length(w.candidate_macs, 1) > 1 then
+    update dosen4.detection_windows set status = 'ambiguous' where id = w.id;
+    return query select false, 0::numeric;
+    return;
+  end if;
+
+  return query select true, extract(epoch from (w.expires_at - now()));
+end;
+$$;
+
+revoke all on function dosen4.observe_macs_for_detection(text[]) from public;
+grant execute on function dosen4.observe_macs_for_detection(text[]) to service_role;
+
+-- Cheap, scan-free probe the agent can call frequently (e.g. every 5s)
+-- during its normal idle cadence, to notice a newly-opened window sooner
+-- than waiting out the full scan interval -- without needing a real
+-- network scan just to check.
+create or replace function dosen4.is_detection_window_open()
+returns boolean
+language sql
+stable
+security definer
+set search_path = dosen4
+as $$
+  select exists(
+    select 1 from dosen4.detection_windows
+    where status = 'open' and expires_at > now()
+  );
+$$;
+
+revoke all on function dosen4.is_detection_window_open() from public;
+grant execute on function dosen4.is_detection_window_open() to service_role;

@@ -25,14 +25,47 @@
       <button id="sign-out" class="btn">Sign out</button>
     </div>
 
-    <div id="register-form-wrap" class="card" hidden>
-      <h2 style="font-size:1rem;margin-top:0;">Add a device</h2>
-      <form id="register-form">
-        <input id="mac-input" class="field" type="text" placeholder="MAC address (e.g. aa:bb:cc:dd:ee:ff)" autocomplete="off" required />
-        <input id="label-input" class="field" type="text" placeholder="Label (e.g. My laptop)" autocomplete="off" />
-        <button type="submit" class="btn primary">Register device</button>
-      </form>
+    <div id="detect-wrap" class="card" hidden>
+      <h2 style="font-size:1rem;margin-top:0;">Register this device</h2>
+
+      <div id="detect-idle">
+        <p class="notice info">Works for phones and laptops alike — no typing, no app to install.</p>
+        <input id="detect-label-input" class="field" type="text" placeholder="Label (e.g. My laptop)" autocomplete="off" />
+        <button id="detect-start" class="btn primary">Detect my device</button>
+      </div>
+
+      <div id="detect-active" hidden>
+        <ol>
+          <li><strong>Turn Wi-Fi OFF</strong> on the device you want to register — do this first.</li>
+          <li>Confirm below once it's off.</li>
+          <li>Wait a few seconds, then turn Wi-Fi back ON.</li>
+        </ol>
+        <p id="detect-step2" hidden>
+          <button id="detect-confirm-off" class="btn primary">My Wi-Fi is off — start detecting</button>
+        </p>
+        <p id="detect-waiting" hidden>
+          Waiting for your device to reconnect&hellip; <span id="detect-countdown"></span>
+        </p>
+        <button id="detect-cancel" class="btn">Cancel</button>
+      </div>
     </div>
+
+    <details id="manual-fallback">
+      <summary>On a phone and detection didn't work? Enter the MAC manually</summary>
+      <div class="card">
+        <p class="notice info">
+          Find your device's Wi-Fi MAC address: iOS — Settings → Wi-Fi → (i) next to the network
+          → "Wireless Address"/"Private Wi-Fi Address". Android — Settings → About phone → Status
+          → Wi-Fi MAC address. Windows — run <code>getmac</code>. Mac/Linux — run <code>ifconfig</code>
+          or <code>ip link</code>.
+        </p>
+        <form id="register-form">
+          <input id="mac-input" class="field" type="text" placeholder="MAC address (e.g. aa:bb:cc:dd:ee:ff)" autocomplete="off" required />
+          <input id="label-input" class="field" type="text" placeholder="Label (e.g. My phone)" autocomplete="off" />
+          <button type="submit" class="btn primary">Register device</button>
+        </form>
+      </div>
+    </details>
 
     <div id="devices-wrap" hidden>
       <h2 style="font-size:1rem;">Your devices</h2>

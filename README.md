@@ -124,6 +124,28 @@ For bulk/admin registration (e.g. a legacy user with no Google account),
 add rows to `users`/`devices` directly via Supabase Studio's table editor
 or `insert` statements like `supabase/seed.sql` — unaffected by the above.
 
+### Auto-detected registration (no typing, no manual MAC entry)
+
+The primary flow on `register.html` doesn't ask for a MAC at all: the user
+clicks "Detect my device", turns Wi-Fi off then back on per the on-screen
+instructions, and the currently-running `ada` agent (which has the LAN
+visibility a browser never can) correlates "who just started a detection
+window" with "what MAC just freshly reappeared on the network" and
+registers it automatically. Works identically for phones and laptops.
+
+This **requires the `ada` agent to be running** against the same Supabase
+project — it's what actually observes the network and resolves the
+window (`dosen4.observe_macs_for_detection`, called every scan cycle). If
+the agent is down, detection windows will just expire with no matches.
+At most one detection window is open campus-wide at a time (enforced in
+Postgres), so two people can't register simultaneously — the second gets
+a "someone else is registering right now" message and can retry shortly.
+
+Manual MAC entry (`register_device`) is kept as a fallback under "On a
+phone and detection didn't work? Enter the MAC manually" — same iOS/
+Android/Windows/Mac lookup hints as before, in case reconnect detection
+repeatedly fails for someone.
+
 ## Architecture recap
 
 ```
