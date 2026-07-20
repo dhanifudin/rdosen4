@@ -365,10 +365,29 @@ create table if not exists dosen4.detection_windows (
   status text not null default 'open' check (status in ('open', 'resolved', 'ambiguous', 'expired')),
   baseline_macs text[],
   candidate_macs text[] not null default '{}',
-  resolved_device_id uuid references dosen4.devices(id),
+  resolved_device_id uuid references dosen4.devices(id) on delete set null,
   started_at timestamptz not null default now(),
   expires_at timestamptz not null default now() + interval '120 seconds'
 );
+
+-- Fix up the FK on an already-existing table (create table if not exists
+-- above won't retroactively change it): resolved_device_id is just an
+-- informational pointer to detection history, so removing a device must
+-- not be blocked by it -- null it out instead.
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint
+    where conname = 'detection_windows_resolved_device_id_fkey'
+      and confdeltype <> 'n'  -- not already ON DELETE SET NULL
+  ) then
+    alter table dosen4.detection_windows
+      drop constraint detection_windows_resolved_device_id_fkey;
+    alter table dosen4.detection_windows
+      add constraint detection_windows_resolved_device_id_fkey
+      foreign key (resolved_device_id) references dosen4.devices(id) on delete set null;
+  end if;
+end $$;
 
 -- A partial unique index on a constant expression: every qualifying row
 -- indexes to the same value, so at most one row total can ever have
