@@ -10,7 +10,11 @@ if (SUPABASE_URL.includes('YOUR-PROJECT') || SUPABASE_ANON_KEY.includes('YOUR-AN
   throw new Error('config.js still has placeholder Supabase credentials');
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// All attendance objects live in the `dosen4` Postgres schema (not
+// `public`) — see ../supabase/schema.sql. It must be added to Supabase's
+// "Exposed schemas" (Project Settings -> API) or every call below 404s.
+const DB_SCHEMA = 'dosen4';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: DB_SCHEMA } });
 
 /** @type {Map<string, {user_id: string, full_name: string, status: string, last_seen_at: string|null, since: string|null}>} */
 const rows = new Map();
@@ -82,7 +86,7 @@ async function refreshUser(userId) {
 function subscribeRealtime() {
   supabase
     .channel('presence-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'presence' }, (payload) => {
+    .on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: 'presence' }, (payload) => {
       const userId = payload.new?.user_id ?? payload.old?.user_id;
       if (userId) refreshUser(userId);
     })
