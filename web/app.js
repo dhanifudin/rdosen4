@@ -85,7 +85,7 @@ const PRESET_TAB_CLASSES = {
 function statusTab(status) {
   if (status === 'present') return { label: 'MASUK', classes: 'bg-present dark:bg-presentdark text-white dark:text-paperdark' };
   if (status === 'absent') return { label: 'KELUAR', classes: 'bg-absentc dark:bg-absentcdark text-white dark:text-paperdark' };
-  if (status === 'private') return { label: 'PRIBADI', classes: 'bg-muted dark:bg-muteddark text-white dark:text-paperdark' };
+  if (status === 'private') return { label: 'DISEMBUNYIKAN', classes: 'bg-muted dark:bg-muteddark text-white dark:text-paperdark' };
   const preset = PRESET_TAB_CLASSES[status.toLowerCase()];
   return { label: status.toUpperCase(), classes: preset || 'bg-brass dark:bg-brassdark text-white dark:text-paperdark' };
 }
@@ -120,7 +120,7 @@ function plateCard(r) {
       <div class="min-w-0 flex-1">
         ${textBlock}
       </div>
-      <span class="shrink-0 self-stretch w-24 flex items-center justify-center text-center leading-tight pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
+      <span class="shrink-0 self-stretch w-24 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
         style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
       >${escapeHtml(tab.label)}</span>
     </article>`;
