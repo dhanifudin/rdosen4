@@ -3,7 +3,7 @@
 // (Supabase REST/Realtime) is a different origin and is never intercepted
 // here; only same-origin GET requests are cached.
 
-const CACHE_NAME = 'dosen4-shell-v1';
+const CACHE_NAME = 'dosen4-shell-v2';
 const APP_SHELL = [
   './index.html',
   './devices.html',
