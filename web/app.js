@@ -4,8 +4,8 @@ const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
 
 const noticeEl = document.getElementById('notice');
+const signedOutCardEl = document.getElementById('signed-out-card');
 const signInLinkEl = document.getElementById('sign-in-link');
-const signedInInfoEl = document.getElementById('signed-in-info');
 const userEmailEl = document.getElementById('user-email');
 const signOutBtn = document.getElementById('sign-out');
 
@@ -14,6 +14,7 @@ const statusToggleBtns = Array.from(document.querySelectorAll('.status-toggle'))
 const statusCustomToggleBtn = document.getElementById('status-custom-toggle');
 const statusCustomInputEl = document.getElementById('status-custom-input');
 const statusNoteInputEl = document.getElementById('status-note-input');
+const saveStatusBtn = document.getElementById('save-status-btn');
 const privacyToggleEl = document.getElementById('privacy-toggle');
 const eyeOpenEl = document.getElementById('eye-open');
 const eyeClosedEl = document.getElementById('eye-closed');
@@ -191,7 +192,6 @@ async function loadStatus() {
 
   setActiveStatus(data.manual_status || '');
   statusNoteInputEl.value = data.manual_note || '';
-  statusNoteInputEl.disabled = !data.manual_status;
 
   const privacyOn = Boolean(data.privacy_mode);
   privacyToggleEl.setAttribute('aria-pressed', String(privacyOn));
@@ -201,7 +201,10 @@ async function loadStatus() {
 
 // Reflects `status` (empty string = Otomatis) in the toggle group's visual
 // active state, including self-labeling the "Lainnya..." pill with the
-// actual custom text when that's what's active.
+// actual custom text when that's what's active. This is the single place
+// that reflects a selection -- whether it came from the server (loadStatus,
+// on load / after a save) or a local click (nothing sent to the server
+// until Simpan is pressed).
 function setActiveStatus(status) {
   const isKnown = status === '' || KNOWN_PRESETS.has(status);
   statusCustomToggleBtn.textContent = isKnown ? CUSTOM_TOGGLE_DEFAULT_LABEL : status;
@@ -224,6 +227,7 @@ function setActiveStatus(status) {
 
   statusCustomInputEl.hidden = true;
   statusCustomInputEl.value = isKnown ? '' : status;
+  statusNoteInputEl.disabled = status === '';
 }
 
 async function saveStatus(status, note) {
@@ -235,8 +239,19 @@ async function saveStatus(status, note) {
     showNotice(error.message);
     return;
   }
-  clearNotice();
+  showNotice('Status berhasil diperbarui.', 'info');
   await loadStatus();
+}
+
+// Reads whatever's currently selected in the toggle group -- purely local
+// state, since clicking a pill no longer saves by itself (see below).
+function getActiveStatus() {
+  const activeBtn = statusToggleBtns.find((btn) => btn.classList.contains('bg-brass'));
+  if (!activeBtn) return '';
+  // setActiveStatus() already keeps this in sync with the real custom text
+  // whenever the custom pill is the active one, so no need to also read the
+  // (hidden) input's value here.
+  return activeBtn === statusCustomToggleBtn ? activeBtn.textContent : activeBtn.dataset.status;
 }
 
 async function togglePrivacy() {
@@ -254,7 +269,7 @@ async function togglePrivacy() {
 
 for (const btn of statusToggleBtns) {
   if (btn === statusCustomToggleBtn) continue;
-  btn.addEventListener('click', () => saveStatus(btn.dataset.status, statusNoteInputEl.value));
+  btn.addEventListener('click', () => setActiveStatus(btn.dataset.status));
 }
 
 statusCustomToggleBtn.addEventListener('click', () => {
@@ -271,20 +286,14 @@ statusCustomInputEl.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   e.preventDefault();
   const value = statusCustomInputEl.value.trim();
-  if (value) saveStatus(value, statusNoteInputEl.value);
+  if (value) setActiveStatus(value);
 });
 
 statusCustomInputEl.addEventListener('blur', () => {
   if (!statusCustomInputEl.value.trim()) statusCustomInputEl.hidden = true;
 });
 
-statusNoteInputEl.addEventListener('blur', () => {
-  const activeBtn = statusToggleBtns.find((btn) => btn.classList.contains('bg-brass'));
-  const activeStatus = activeBtn === statusCustomToggleBtn
-    ? statusCustomInputEl.value.trim() || activeBtn.textContent
-    : activeBtn?.dataset.status;
-  if (activeStatus) saveStatus(activeStatus, statusNoteInputEl.value);
-});
+saveStatusBtn.addEventListener('click', () => saveStatus(getActiveStatus(), statusNoteInputEl.value));
 
 privacyToggleEl.addEventListener('click', togglePrivacy);
 
@@ -297,32 +306,26 @@ async function renderAuth(session) {
   const email = await checkDomainOrSignOut(session);
 
   if (!session) {
-    signInLinkEl.hidden = false;
-    signedInInfoEl.hidden = true;
+    signedOutCardEl.hidden = false;
     statusWrapEl.hidden = true;
     return;
   }
 
   if (!email) {
     showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat memperbarui status. Anda masuk sebagai ${session.user.email}.`);
-    signInLinkEl.hidden = false;
-    signedInInfoEl.hidden = true;
+    signedOutCardEl.hidden = false;
     statusWrapEl.hidden = true;
     return;
   }
 
   clearNotice();
-  signInLinkEl.hidden = true;
-  signedInInfoEl.hidden = false;
+  signedOutCardEl.hidden = true;
   statusWrapEl.hidden = false;
   userEmailEl.textContent = email;
   await loadStatus();
 }
 
-signInLinkEl.addEventListener('click', (e) => {
-  e.preventDefault();
-  signInWithGoogle();
-});
+signInLinkEl.addEventListener('click', () => signInWithGoogle());
 signOutBtn.addEventListener('click', signOut);
 
 supabase.auth.onAuthStateChange((_event, session) => renderAuth(session));
