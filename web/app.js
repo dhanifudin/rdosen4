@@ -119,8 +119,8 @@ function seenLine(r) {
 function plateCard(r) {
   const tab = statusTab(r.status);
   const photo = r.photo_url
-    ? `<img class="w-13 h-13 rounded object-cover border border-line dark:border-linedark shrink-0" style="width:52px;height:52px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
-    : `<div class="w-13 h-13 rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:52px;height:52px">${escapeHtml(initials(r.full_name))}</div>`;
+    ? `<img class="rounded object-cover border border-line dark:border-linedark shrink-0" style="width:72px;height:72px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
+    : `<div class="rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:72px;height:72px">${escapeHtml(initials(r.full_name))}</div>`;
 
   // The name lives on its own full-width row below the photo, so the slot
   // beside the photo is reserved exclusively for the note/info line: the
@@ -130,15 +130,19 @@ function plateCard(r) {
   const infoLine = r.note
     ? `<p class="font-plate text-sm leading-snug break-words">${escapeHtml(r.note)}</p>`
     : (seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : '');
+  // Only reserve the flex-1 middle slot when there's something to put in it --
+  // an empty flex-1 div still claims its share of the row's width via
+  // flex-grow, which is exactly what read as a dead gap between the photo
+  // and the badge (e.g. "private" with no note). justify-between pulls the
+  // badge flush against the photo's side when there's nothing between them.
+  const infoSlot = infoLine ? `<div class="min-w-0 flex-1">${infoLine}</div>` : '';
 
   return `
-    <article class="relative flex flex-col gap-2 px-4 py-3.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
-      <div class="flex items-center gap-3.5">
+    <article class="relative flex flex-col gap-2 px-4 py-3 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between gap-3">
         ${photo}
-        <div class="min-w-0 flex-1">
-          ${infoLine}
-        </div>
-        <span class="shrink-0 self-stretch w-32 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -mt-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
+        ${infoSlot}
+        <span class="shrink-0 self-stretch w-32 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -mt-3 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
           style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
         >${escapeHtml(tab.label)}</span>
       </div>
