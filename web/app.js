@@ -122,25 +122,27 @@ function plateCard(r) {
     ? `<img class="w-13 h-13 rounded object-cover border border-line dark:border-linedark shrink-0" style="width:52px;height:52px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
     : `<div class="w-13 h-13 rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:52px;height:52px">${escapeHtml(initials(r.full_name))}</div>`;
 
-  // A note is only ever present alongside a manual status. When set, it's the
-  // most useful thing on the card, so lead with it and demote the name to a
-  // small subline instead of the usual name-on-top layout.
+  // The name lives on its own full-width row below the photo, so the slot
+  // beside the photo is reserved exclusively for the note/info line: the
+  // manual note if one is set, else the auto-tracking timestamp, else empty
+  // (e.g. private with no note) -- never both, no swapping needed.
   const seenText = seenLine(r);
-  const textBlock = r.note
-    ? `<p class="font-plate text-base leading-snug break-words">${escapeHtml(r.note)}</p>
-       <p class="text-xs text-muted dark:text-muteddark break-words">${escapeHtml(r.full_name)}</p>`
-    : `<h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
-       ${seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : ''}`;
+  const infoLine = r.note
+    ? `<p class="font-plate text-sm leading-snug break-words">${escapeHtml(r.note)}</p>`
+    : (seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : '');
 
   return `
-    <article class="relative flex items-center gap-3.5 px-4 py-3.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
-      ${photo}
-      <div class="min-w-0 flex-1">
-        ${textBlock}
+    <article class="relative flex flex-col gap-2 px-4 py-3.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
+      <div class="flex items-center gap-3.5">
+        ${photo}
+        <div class="min-w-0 flex-1">
+          ${infoLine}
+        </div>
+        <span class="shrink-0 self-stretch w-32 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -mt-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
+          style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
+        >${escapeHtml(tab.label)}</span>
       </div>
-      <span class="shrink-0 self-stretch w-32 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
-        style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
-      >${escapeHtml(tab.label)}</span>
+      <h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
     </article>`;
 }
 
