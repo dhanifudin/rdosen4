@@ -100,17 +100,25 @@ function seenLine(r) {
 
 function plateCard(r) {
   const tab = statusTab(r.status);
-  const seenText = seenLine(r);
   const photo = r.photo_url
     ? `<img class="w-13 h-13 rounded object-cover border border-line dark:border-linedark shrink-0" style="width:52px;height:52px" src="${escapeHtml(r.photo_url)}" alt="${escapeHtml(r.full_name)}" loading="lazy" />`
     : `<div class="w-13 h-13 rounded border border-line dark:border-linedark shrink-0 flex items-center justify-center bg-surface2 dark:bg-surfacedark2 font-plate text-sm text-muted dark:text-muteddark" style="width:52px;height:52px">${escapeHtml(initials(r.full_name))}</div>`;
+
+  // A note is only ever present alongside a manual status. When set, it's the
+  // most useful thing on the card, so lead with it and demote the name to a
+  // small subline instead of the usual name-on-top layout.
+  const seenText = seenLine(r);
+  const textBlock = r.note
+    ? `<p class="font-plate text-base leading-snug break-words">${escapeHtml(r.note)}</p>
+       <p class="text-xs text-muted dark:text-muteddark break-words">${escapeHtml(r.full_name)}</p>`
+    : `<h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
+       ${seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : ''}`;
 
   return `
     <article class="relative flex items-center gap-3.5 px-4 py-3.5 bg-surface dark:bg-surfacedark border border-line dark:border-linedark rounded shadow-sm overflow-hidden">
       ${photo}
       <div class="min-w-0 flex-1">
-        <h3 class="font-plate font-semibold text-base leading-snug break-words">${escapeHtml(r.full_name)}</h3>
-        ${seenText ? `<p class="text-xs text-muted dark:text-muteddark [font-variant-numeric:tabular-nums] break-words">${escapeHtml(seenText)}</p>` : ''}
+        ${textBlock}
       </div>
       <span class="shrink-0 self-stretch w-24 flex items-center justify-center text-center leading-tight pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
         style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
