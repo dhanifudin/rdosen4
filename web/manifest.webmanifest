@@ -1,7 +1,7 @@
 {
-  "name": "Ruang Dosen 4 — Papan Kehadiran",
+  "name": "Ruang Dosen 4",
   "short_name": "Dosen 4",
-  "description": "Papan kehadiran dosen Ruang Dosen 4, Jurusan Teknologi Informasi, Politeknik Negeri Malang",
+  "description": "Status kehadiran dosen Ruang Dosen 4, Jurusan Teknologi Informasi, Politeknik Negeri Malang",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
