@@ -214,6 +214,12 @@ function setActiveStatus(status) {
     btn.classList.toggle('dark:text-paperdark', isActive);
     btn.classList.toggle('border-brass', isActive);
     btn.classList.toggle('dark:border-brassdark', isActive);
+    // A :hover class rule outranks a plain bg-brass rule by specificity, so
+    // without this the button flashes back to its pale hover fill while the
+    // cursor still sits on it right after being clicked. Drop the neutral
+    // hover classes while active so there's no hover rule left to win.
+    btn.classList.toggle('hover:bg-surface2', !isActive);
+    btn.classList.toggle('dark:hover:bg-surfacedark2', !isActive);
   }
 
   statusCustomInputEl.hidden = true;
