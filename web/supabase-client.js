@@ -48,3 +48,9 @@ export async function checkDomainOrSignOut(session) {
   }
   return email;
 }
+
+// Registered here (not per-page) since both index.html and devices.html
+// already import this module -- one place, runs once per page load.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch((err) => console.error('Service worker registration failed:', err));
+}
