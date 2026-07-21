@@ -313,7 +313,15 @@ statusCustomInputEl.addEventListener('keydown', (e) => {
 });
 
 statusCustomInputEl.addEventListener('blur', () => {
-  if (!statusCustomInputEl.value.trim()) statusCustomInputEl.hidden = true;
+  const value = statusCustomInputEl.value.trim();
+  if (value) {
+    // Commit on any way of leaving the field, not just Enter -- otherwise
+    // "type text, then click Simpan" silently re-saves whatever was
+    // previously active instead of the text just typed.
+    setActiveStatus(value);
+  } else {
+    statusCustomInputEl.hidden = true;
+  }
 });
 
 saveStatusBtn.addEventListener('click', () => saveStatus(getActiveStatus(), statusNoteInputEl.value));
