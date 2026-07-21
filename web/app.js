@@ -1,11 +1,13 @@
 import { supabase, configOk, DB_SCHEMA, REQUIRED_DOMAIN, signInWithGoogle, checkDomainOrSignOut } from './supabase-client.js';
 
+const layoutGridEl = document.getElementById('layout-grid');
+const boardWrapEl = document.getElementById('board-wrap');
 const boardEl = document.getElementById('board');
 const updatedEl = document.getElementById('last-updated');
 
 const noticeEl = document.getElementById('notice');
-const signedOutCardEl = document.getElementById('signed-out-card');
 const signInLinkEl = document.getElementById('sign-in-link');
+const signedInInfoEl = document.getElementById('signed-in-info');
 const userEmailEl = document.getElementById('user-email');
 const signOutBtn = document.getElementById('sign-out');
 
@@ -18,6 +20,21 @@ const saveStatusBtn = document.getElementById('save-status-btn');
 const privacyToggleEl = document.getElementById('privacy-toggle');
 const eyeOpenEl = document.getElementById('eye-open');
 const eyeClosedEl = document.getElementById('eye-closed');
+
+// The sidebar's grid classes are toggled in JS, not baked into the static
+// HTML -- the two-column split should only reserve width for the sidebar
+// while there's an actual status panel to show, not for every signed-out
+// visitor (display:none on a hidden grid item does NOT reclaim its
+// column's width, so this can't be done with CSS/hidden alone).
+const SIDEBAR_GRID_CLASSES = ['xl:grid', 'xl:grid-cols-[1fr_280px]', 'xl:gap-8', 'xl:items-start'];
+const SIDEBAR_ASIDE_CLASSES = ['xl:order-2', 'xl:sticky', 'xl:top-10', 'xl:mb-0'];
+const BOARD_ORDER_CLASSES = ['xl:order-1'];
+
+function setSidebarLayout(active) {
+  for (const c of SIDEBAR_GRID_CLASSES) layoutGridEl.classList.toggle(c, active);
+  for (const c of SIDEBAR_ASIDE_CLASSES) statusWrapEl.classList.toggle(c, active);
+  for (const c of BOARD_ORDER_CLASSES) boardWrapEl.classList.toggle(c, active);
+}
 
 const KNOWN_PRESETS = new Set(['Sibuk', 'Tugas Belajar', 'Cuti', 'Rapat']);
 const CUSTOM_TOGGLE_DEFAULT_LABEL = 'Lainnya…';
@@ -306,26 +323,35 @@ async function renderAuth(session) {
   const email = await checkDomainOrSignOut(session);
 
   if (!session) {
-    signedOutCardEl.hidden = false;
+    signInLinkEl.hidden = false;
+    signedInInfoEl.hidden = true;
     statusWrapEl.hidden = true;
+    setSidebarLayout(false);
     return;
   }
 
   if (!email) {
     showNotice(`Hanya akun ${REQUIRED_DOMAIN} yang dapat memperbarui status. Anda masuk sebagai ${session.user.email}.`);
-    signedOutCardEl.hidden = false;
+    signInLinkEl.hidden = false;
+    signedInInfoEl.hidden = true;
     statusWrapEl.hidden = true;
+    setSidebarLayout(false);
     return;
   }
 
   clearNotice();
-  signedOutCardEl.hidden = true;
+  signInLinkEl.hidden = true;
+  signedInInfoEl.hidden = false;
   statusWrapEl.hidden = false;
+  setSidebarLayout(true);
   userEmailEl.textContent = email;
   await loadStatus();
 }
 
-signInLinkEl.addEventListener('click', () => signInWithGoogle());
+signInLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  signInWithGoogle();
+});
 signOutBtn.addEventListener('click', signOut);
 
 supabase.auth.onAuthStateChange((_event, session) => renderAuth(session));
