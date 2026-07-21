@@ -120,7 +120,7 @@ function plateCard(r) {
       <div class="min-w-0 flex-1">
         ${textBlock}
       </div>
-      <span class="shrink-0 self-stretch w-24 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
+      <span class="shrink-0 self-stretch w-32 flex items-center justify-center text-center leading-tight break-words pl-4 pr-2 -my-3.5 -mr-4 text-[0.68rem] font-bold tracking-wider ${tab.classes}"
         style="clip-path:polygon(22% 0, 100% 0, 100% 100%, 0% 100%)"
       >${escapeHtml(tab.label)}</span>
     </article>`;
